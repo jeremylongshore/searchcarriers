@@ -3,4 +3,4 @@ searchcarriers-carrier-intel,stackable,INPUT,working,free,Jeremy,Carrier lookup 
 searchcarriers-risk-engine,stackable,ANALYSIS,working,pro,Jeremy,Risk scoring and vetting logic,Phase 5,Working MCP with 4 tools,No,0.1.0,Yes
 searchcarriers-ops-reporter,stackable,OUTPUT,working,pro,Jeremy,Reports and data export,Phase 6,Working MCP with 4 tools,No,0.1.0,Yes
 searchcarriers-watchdog,standalone,MONITORING,working,proplus,Jeremy,Carrier watch and alert routing,Phase 7,Working MCP with 4 tools,No,0.1.0,Yes
-searchcarriers-api-bridge,standalone,INTEGRATION,planned,smb,Jeremy,Bulk ops and TMS sync,Phase 8,Working MCP with 4 tools,No,0.0.0,No
+searchcarriers-api-bridge,standalone,INTEGRATION,working,smb,Jeremy,Bulk ops and TMS sync,Phase 8,Working MCP with 4 tools,No,0.1.0,Yes

@@ -150,9 +150,9 @@ Features available at each SearchCarriers subscription tier:
 | **Carrier Watch** | - | - | - | x | x | x |
 | **Alert Routing (Slack/Telegram)** | - | - | - | x | x | x |
 | **Compliance Dashboard** | - | - | - | x | x | x |
-| **Contact Verifier** | - | - | - | - | x | x |
+| **Contact Verifier** | - | - | x | x | x | x |
 | **Bulk Processor** | - | - | - | - | x | x |
-| **TMS Sync** | - | - | - | - | x | x |
+| **TMS Sync** | - | - | - | - | - | x |
 | **Webhook Management** | - | - | - | - | x | x |
 | **Fleet Risk Dashboard** | - | - | - | - | - | x |
 | **Automated Onboarding** | - | - | - | - | - | x |

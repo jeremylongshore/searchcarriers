@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- pyproject.toml: removed unused setuptools-scm, added `packages = []` to fix editable install
+- README.md tier matrix: Contact Verifier corrected to Pro (was SMB), TMS Sync corrected to Enterprise-only (was SMB)
+- Aligned all SKILL.md metadata versions to 0.1.0 (15 files were incorrectly at 1.0.0)
+- validate.sh: fixed `find` alias conflict (use /usr/bin/find), fixed `set -e` with `$VERBOSE &&` pattern
+- Added workflows/ to validator and test fixture scan paths
+- Added embedded skills and workflow skills to skills_inventory.csv (12 new entries)
+
 ## [0.1.0] - 2026-02-26
 
 ### Added

@@ -6,7 +6,7 @@ description: >-
 allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
 metadata:
   author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 1.0.0
+  version: 0.1.0
   license: BUSL-1.1
   tier: proplus
 ---

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "searchcarriers-plugins"
+dynamic = ["version"]
+description = "Plugin and skills repo for SearchCarriers motor carrier intelligence"
+requires-python = ">=3.10"
+license = "BUSL-1.1"
+authors = [
+    { name = "Jeremy Longshore", email = "jeremy@intentsolutions.io" },
+    { name = "Garret", email = "garrett@searchcarriers.com" },
+]
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests requiring API access",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

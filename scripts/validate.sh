@@ -210,6 +210,8 @@ if [ "$SKILLS_ONLY" != "true" ]; then
     plugin_count=0
     for plugin_dir in plugins/*/; do
         [ -d "$plugin_dir" ] || continue
+        # Skip shared utilities directory
+        [ "$(basename "$plugin_dir")" = "shared" ] && continue
         validate_plugin "$plugin_dir"
         plugin_count=$((plugin_count + 1))
     done

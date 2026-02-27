@@ -27,7 +27,7 @@ def all_plugin_dirs(repo_root):
     plugins_dir = repo_root / "plugins"
     if not plugins_dir.exists():
         return []
-    return [d for d in plugins_dir.iterdir() if d.is_dir()]
+    return [d for d in plugins_dir.iterdir() if d.is_dir() and d.name != "shared"]
 
 
 @pytest.fixture

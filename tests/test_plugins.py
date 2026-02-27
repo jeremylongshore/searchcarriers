@@ -66,8 +66,13 @@ class TestTierGating:
     def test_tier_values_valid(self, all_plugin_jsons):
         for pj in all_plugin_jsons:
             data = json.loads(pj.read_text())
-            tools = data.get("tools", {})
-            for tool_name, tool_config in tools.items():
-                tier = tool_config.get("min_tier", "free")
+            # Plugin-level tier
+            plugin_tier = data.get("min_tier", "free")
+            assert plugin_tier in TIER_VALUES, \
+                f"{pj}: Invalid plugin tier '{plugin_tier}'"
+            # Per-tool tiers (tools is a list of dicts)
+            tools = data.get("tools", [])
+            for tool in tools:
+                tier = tool.get("min_tier", "free")
                 assert tier in TIER_VALUES, \
-                    f"{pj}: Invalid tier '{tier}' for tool '{tool_name}'"
+                    f"{pj}: Invalid tier '{tier}' for tool '{tool.get('name', '?')}'"

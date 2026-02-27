@@ -201,6 +201,11 @@ if [ "$PLUGINS_ONLY" != "true" ]; then
         validate_skill "$skill_file"
         skill_count=$((skill_count + 1))
     done < <(/usr/bin/find plugins -name "SKILL.md" -type f 2>/dev/null || true)
+    # Also check workflow skills
+    while IFS= read -r skill_file; do
+        validate_skill "$skill_file"
+        skill_count=$((skill_count + 1))
+    done < <(/usr/bin/find workflows -name "SKILL.md" -type f 2>/dev/null || true)
     echo "  Checked $skill_count skill(s)"
     echo ""
 fi

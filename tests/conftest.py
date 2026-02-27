@@ -15,9 +15,10 @@ def repo_root():
 
 @pytest.fixture
 def all_skill_files(repo_root):
-    """Find all SKILL.md files in skills/ and plugins/."""
+    """Find all SKILL.md files in skills/, plugins/, and workflows/."""
     skills = list(repo_root.glob("skills/**/SKILL.md"))
     skills += list(repo_root.glob("plugins/**/SKILL.md"))
+    skills += list(repo_root.glob("workflows/**/SKILL.md"))
     return skills
 
 

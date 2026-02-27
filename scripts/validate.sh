@@ -33,7 +33,7 @@ validate_skill() {
     local skill_name
     skill_name=$(basename "$skill_dir")
 
-    $VERBOSE && log "Checking $skill_file"
+    $VERBOSE && log "Checking $skill_file" || true
 
     # Check frontmatter exists
     if ! head -1 "$skill_file" | grep -q "^---$"; then
@@ -132,7 +132,7 @@ if len(parts) >= 3:
         fi
     fi
 
-    $VERBOSE && pass "$skill_file"
+    $VERBOSE && pass "$skill_file" || true
 }
 
 # --- PLUGIN VALIDATION ---
@@ -141,7 +141,7 @@ validate_plugin() {
     local plugin_name
     plugin_name=$(basename "$plugin_dir")
 
-    $VERBOSE && log "Checking plugin: $plugin_name"
+    $VERBOSE && log "Checking plugin: $plugin_name" || true
 
     # Check plugin.json exists
     local pjson="$plugin_dir/.claude-plugin/plugin.json"
@@ -156,7 +156,7 @@ validate_plugin() {
                     fail "$pjson: Missing required field '$field'"
                 fi
             done
-            $VERBOSE && pass "$pjson"
+            $VERBOSE && pass "$pjson" || true
         fi
     else
         warn "$plugin_dir: No .claude-plugin/plugin.json found"
@@ -179,7 +179,7 @@ validate_plugin() {
     fi
 
     # Validate embedded skills
-    find "$plugin_dir" -name "SKILL.md" -type f 2>/dev/null | while read -r sf; do
+    /usr/bin/find "$plugin_dir" -name "SKILL.md" -type f 2>/dev/null | while read -r sf; do
         validate_skill "$sf"
     done
 }
@@ -195,12 +195,12 @@ if [ "$PLUGINS_ONLY" != "true" ]; then
     while IFS= read -r skill_file; do
         validate_skill "$skill_file"
         skill_count=$((skill_count + 1))
-    done < <(find skills -name "SKILL.md" -type f 2>/dev/null || true)
+    done < <(/usr/bin/find skills -name "SKILL.md" -type f 2>/dev/null || true)
     # Also check plugin-embedded skills
     while IFS= read -r skill_file; do
         validate_skill "$skill_file"
         skill_count=$((skill_count + 1))
-    done < <(find plugins -name "SKILL.md" -type f 2>/dev/null || true)
+    done < <(/usr/bin/find plugins -name "SKILL.md" -type f 2>/dev/null || true)
     echo "  Checked $skill_count skill(s)"
     echo ""
 fi

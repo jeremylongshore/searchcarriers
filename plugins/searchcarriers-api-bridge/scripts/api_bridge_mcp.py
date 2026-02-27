@@ -57,13 +57,14 @@ BULK_MAX_DOT_NUMBERS = 100
 WEBHOOK_CONFIG_PATH = Path.home() / ".searchcarriers" / "webhooks.json"
 
 # Endpoints probed by api_health.
+# Company-scoped endpoints use DOT 1 as a probe target; a 404 is treated as healthy.
 HEALTH_ENDPOINTS: list[dict[str, str]] = [
     {"name": "search",        "url": "/search",              "probe_params": "dotNumber=1"},
-    {"name": "authorities",   "url": "/authorities",         "probe_params": "dotNumber=1"},
-    {"name": "insurances",    "url": "/insurances",          "probe_params": "dotNumber=1"},
-    {"name": "equipment",     "url": "/equipment",           "probe_params": "dotNumber=1"},
-    {"name": "carrier_watch", "url": "/carrier-watch",       "probe_params": ""},
-    {"name": "alerts",        "url": "/carrier-watch/alerts","probe_params": ""},
+    {"name": "authorities",   "url": "/company/1/authorities","probe_params": ""},
+    {"name": "insurances",    "url": "/company/1/insurances", "probe_params": ""},
+    {"name": "equipment",     "url": "/company/1/equipment",  "probe_params": ""},
+    {"name": "carrier_watch", "url": "/carrier-watch",        "probe_params": ""},
+    {"name": "alerts",        "url": "/carrier-watch/alerts", "probe_params": ""},
 ]
 
 # Supported data sections for bulk_lookup.
@@ -395,17 +396,20 @@ async def _fetch_section(
     Returns:
         (section, data_or_none, error_message_or_none)
     """
-    endpoint_map = {
-        "basics":      "/search",
-        "authorities": "/authorities",
-        "insurances":  "/insurances",
-        "equipment":   "/equipment",
-    }
-    path = endpoint_map[section]
-    url = f"{API_BASE}{path}"
+    if section == "basics":
+        url = f"{API_BASE}/search"
+        params: dict[str, str] | None = {"dotNumber": dot}
+    else:
+        section_path = {
+            "authorities": "authorities",
+            "insurances":  "insurances",
+            "equipment":   "equipment",
+        }[section]
+        url = f"{API_BASE}/company/{dot}/{section_path}"
+        params = None
 
     try:
-        data, _ = await _get(client, url, params={"dotNumber": dot})
+        data, _ = await _get(client, url, params=params)
         if section == "basics":
             return section, _extract_carrier(data), None
         return section, _extract_list(data), None
@@ -638,10 +642,10 @@ async def _tms_sync(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
-        search_task      = _get(client, f"{API_BASE}/search",      {"dotNumber": dot})
-        authorities_task = _get(client, f"{API_BASE}/authorities", {"dotNumber": dot})
-        insurances_task  = _get(client, f"{API_BASE}/insurances",  {"dotNumber": dot})
-        equipment_task   = _get(client, f"{API_BASE}/equipment",   {"dotNumber": dot})
+        search_task      = _get(client, f"{API_BASE}/search",                     {"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
+        insurances_task  = _get(client, f"{API_BASE}/company/{dot}/insurances")
+        equipment_task   = _get(client, f"{API_BASE}/company/{dot}/equipment")
 
         raw_results = await asyncio.gather(
             search_task, authorities_task, insurances_task, equipment_task,

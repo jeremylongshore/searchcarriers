@@ -46,15 +46,17 @@ The `risk_score` tool returns a composite risk score (0-100) with individual fac
 
 The composite score is a weighted sum of individual factor scores. Each factor is scored 0-100 independently, then weighted:
 
-| Factor | Weight | What It Measures |
-|--------|--------|------------------|
-| Safety Rating | 25% | FMCSA safety rating and review history |
-| Insurance Coverage | 20% | Active coverage, adequacy vs. minimums, gaps |
-| Authority Status | 15% | Authority types, active status, revocations |
-| OOS Rates | 15% | Vehicle and driver out-of-service percentages vs. national averages |
-| Operating History | 10% | Time in operation, MCS-150 currency, entity stability |
-| Crash History | 10% | Fatal, injury, and towaway crashes over trailing 24 months |
-| Compliance Currency | 5% | MCS-150 filing recency, registration completeness |
+| Factor | Max Penalty | What It Measures |
+|--------|-------------|------------------|
+| Operating Status | +30 | Not-authorized operating status |
+| Safety Rating | +25 | Unsatisfactory (+25), Conditional (+15), Not Rated (+10) |
+| OOS Rates | +20 | Vehicle OOS rate vs. 21% national average |
+| Crash Rate | +20 | Crashes per power unit (>1.0, >0.5, >0.2 thresholds) |
+| Insurance Status | +20 | No active policies or near-cancellation |
+| Authority Status | +20 | Revoked or no active authority |
+| MCS-150 Age | +10 | >2 years (+5) or >4 years (+10) since filing |
+
+The score is additive: each factor contributes a penalty (0 to its max). The total is capped at 100.
 
 **Interpreting Individual Factors**
 

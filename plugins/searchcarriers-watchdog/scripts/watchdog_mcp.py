@@ -744,15 +744,13 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
         return _error_payload("missing_parameter", "dot_number is required.")
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
-    insurances_url = f"{API_BASE}/insurances"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url, params={"dotNumber": dot})
-        insurances_task = _get(client, insurances_url, params={"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
+        insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
         search_result, authorities_result, insurances_result = await asyncio.gather(
             search_task, authorities_task, insurances_task, return_exceptions=True

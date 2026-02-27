@@ -407,15 +407,13 @@ async def _risk_score(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     dot: str = str(arguments["dot_number"]).strip()
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
-    insurances_url = f"{API_BASE}/insurances"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url, params={"dotNumber": dot})
-        insurances_task = _get(client, insurances_url, params={"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
+        insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
         results = await asyncio.gather(
             search_task, authorities_task, insurances_task, return_exceptions=True
@@ -518,15 +516,13 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     rules = {**DEFAULT_VETTING_RULES, **custom_rules}
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
-    insurances_url = f"{API_BASE}/insurances"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url, params={"dotNumber": dot})
-        insurances_task = _get(client, insurances_url, params={"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
+        insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
         results = await asyncio.gather(
             search_task, authorities_task, insurances_task, return_exceptions=True
@@ -585,33 +581,37 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
         )
 
     # Rule 2: Insurance coverage minimum.
+    # Uses max() across individual policy amounts — the $750K minimum applies
+    # per-policy, not in aggregate across all policies.
     active_insurances = [
         ins for ins in insurances
         if str(ins.get("status") or "").lower() in ("active", "current")
     ]
-    total_coverage = 0
+    policy_amounts: list[float] = []
     for ins in active_insurances:
         try:
             coverage = float(ins.get("coverageTo") or ins.get("coverageFrom") or 0)
-            total_coverage += coverage
+            if coverage > 0:
+                policy_amounts.append(coverage)
         except (TypeError, ValueError):
             pass
+    max_coverage = max(policy_amounts, default=0.0)
 
     min_coverage = float(rules["min_insurance_coverage"])
-    if active_insurances and total_coverage >= min_coverage:
+    if active_insurances and max_coverage >= min_coverage:
         _rule(
             "min_insurance_coverage", "pass",
-            total_coverage, min_coverage,
-            f"Total active coverage ${total_coverage:,.0f} meets the ${min_coverage:,.0f} minimum.",
+            max_coverage, min_coverage,
+            f"Highest single-policy coverage ${max_coverage:,.0f} meets the ${min_coverage:,.0f} minimum.",
         )
-    elif active_insurances and total_coverage > 0:
+    elif active_insurances and max_coverage > 0:
         _rule(
             "min_insurance_coverage", "fail",
-            total_coverage, min_coverage,
-            f"Active coverage ${total_coverage:,.0f} is below the ${min_coverage:,.0f} minimum.",
+            max_coverage, min_coverage,
+            f"Highest single-policy coverage ${max_coverage:,.0f} is below the ${min_coverage:,.0f} minimum.",
         )
     elif active_insurances:
-        # Active policies exist but coverage amounts not available in API data.
+        # Active policies exist but no parseable coverage amounts in API data.
         _rule(
             "min_insurance_coverage", "review",
             "coverage amounts unavailable", min_coverage,
@@ -778,7 +778,7 @@ async def _insurance_check(arguments: dict[str, Any], api_key: str) -> dict[str,
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         try:
-            raw = await _get(client, f"{API_BASE}/insurances", params={"dotNumber": dot})
+            raw = await _get(client, f"{API_BASE}/company/{dot}/insurances")
         except RuntimeError as exc:
             return _error_payload("api_error", str(exc))
 
@@ -908,13 +908,12 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
     dot: str = str(arguments["dot_number"]).strip()
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url, params={"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
 
         results = await asyncio.gather(
             search_task, authorities_task, return_exceptions=True

@@ -419,15 +419,13 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
         fmt = "markdown"
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
-    insurances_url = f"{API_BASE}/insurances"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url, params={"dotNumber": dot})
-        insurances_task = _get(client, insurances_url, params={"dotNumber": dot})
+        authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
+        insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
         results = await asyncio.gather(
             search_task, authorities_task, insurances_task, return_exceptions=True
@@ -689,13 +687,12 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
     dot: str = str(arguments["dot_number"]).strip()
 
     search_url = f"{API_BASE}/search"
-    equipment_url = f"{API_BASE}/equipment"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
     ) as client:
         search_task = _get(client, search_url, params={"dotNumber": dot})
-        equipment_task = _get(client, equipment_url, params={"dotNumber": dot})
+        equipment_task = _get(client, f"{API_BASE}/company/{dot}/equipment")
 
         results = await asyncio.gather(search_task, equipment_task, return_exceptions=True)
 
@@ -852,8 +849,6 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
         )
 
     search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/authorities"
-    insurances_url = f"{API_BASE}/insurances"
 
     async with httpx.AsyncClient(
         headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
@@ -862,8 +857,8 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
         tasks: list[Any] = []
         for dot in dot_numbers:
             tasks.append(_get(client, search_url, params={"dotNumber": dot}))
-            tasks.append(_get(client, authorities_url, params={"dotNumber": dot}))
-            tasks.append(_get(client, insurances_url, params={"dotNumber": dot}))
+            tasks.append(_get(client, f"{API_BASE}/company/{dot}/authorities"))
+            tasks.append(_get(client, f"{API_BASE}/company/{dot}/insurances"))
 
         all_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1068,12 +1063,13 @@ async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any
     if not requested_sections:
         requested_sections = all_sections
 
-    # Map section names to endpoint URLs
-    section_urls: dict[str, tuple[str, dict[str, Any]]] = {
-        "basics": (f"{API_BASE}/search", {"dotNumber": dot}),
-        "authorities": (f"{API_BASE}/authorities", {"dotNumber": dot}),
-        "insurances": (f"{API_BASE}/insurances", {"dotNumber": dot}),
-        "equipment": (f"{API_BASE}/equipment", {"dotNumber": dot}),
+    # Map section names to (url, params) tuples.
+    # Search uses a query param; company-scoped endpoints use path params.
+    section_urls: dict[str, tuple[str, dict[str, Any] | None]] = {
+        "basics":      (f"{API_BASE}/search",                      {"dotNumber": dot}),
+        "authorities": (f"{API_BASE}/company/{dot}/authorities",   None),
+        "insurances":  (f"{API_BASE}/company/{dot}/insurances",    None),
+        "equipment":   (f"{API_BASE}/company/{dot}/equipment",     None),
     }
 
     async with httpx.AsyncClient(

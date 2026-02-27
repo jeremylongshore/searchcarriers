@@ -75,7 +75,7 @@ searchcarriers-risk-engine/
 | Response time | < 3s per tool call |
 | Availability | Follows SearchCarriers API SLA |
 | Scoring accuracy | < 5% false positive rate on high-risk flags |
-| Data freshness | Real-time via API (no caching) |
+| Data freshness | Current via API, no caching (FMCSA data synced nightly) |
 
 ## Inventory Reference
 

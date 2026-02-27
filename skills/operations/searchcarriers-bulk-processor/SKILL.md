@@ -179,8 +179,9 @@ if not_found:
 if errors:
     print(f'Error DOTs: {[e[\"dot\"] for e in errors[:20]]}')
 
-# Write full results to temp file
-outpath = '/tmp/sc-bulk-results.json'
+# Write full results to output file
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
+outpath = os.path.join(outdir, 'sc-bulk-results.json')
 with open(outpath, 'w') as f:
     json.dump(results, f, indent=2)
 print(f'Full results written to: {outpath}')
@@ -199,16 +200,17 @@ After all batches complete, present results in the user's preferred format:
 | 789012 | Beta Logistics Inc | ACTIVE | OH | 654321 | 8 | Not Rated |
 
 **Full JSON export:**
-Write to `/tmp/sc-bulk-export-{timestamp}.json` with the complete carrier objects.
+Write to `./sc-bulk-export-{timestamp}.json` with the complete carrier objects.
 
 **CSV export:**
-Flatten key fields into a CSV file at `/tmp/sc-bulk-export-{timestamp}.csv`:
+Flatten key fields into a CSV file at `./sc-bulk-export-{timestamp}.csv`:
 
 ```bash
 python3 -c "
-import json, csv, sys, time
+import json, csv, sys, time, os
 
-with open('/tmp/sc-bulk-results.json', 'r') as f:
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
+with open(os.path.join(outdir, 'sc-bulk-results.json'), 'r') as f:
     carriers = json.load(f)
 
 fields = ['dot_number', 'legal_name', 'dba_name', 'mc_mx_ff_number', 'operating_status',
@@ -217,7 +219,7 @@ fields = ['dot_number', 'legal_name', 'dba_name', 'mc_mx_ff_number', 'operating_
           'carrier_operation', 'hm_flag', 'bipd_insurance_on_file', 'bipd_insurance_required']
 
 timestamp = int(time.time())
-outpath = f'/tmp/sc-bulk-export-{timestamp}.csv'
+outpath = os.path.join(outdir, f'sc-bulk-export-{timestamp}.csv')
 with open(outpath, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
     writer.writeheader()
@@ -300,7 +302,7 @@ Small lists (under 20) can be handled in a single API call. Format results as a 
 1. Parse CSV input.
 2. Batch through `/export` in groups of 20.
 3. Flatten results to CSV with key operational fields.
-4. Report: "Exported 147 carriers to /tmp/sc-bulk-export-1706000000.csv"
+4. Report: "Exported 147 carriers to ./sc-bulk-export-1706000000.csv"
 
 ### Example 4: Batch with Enrichment
 

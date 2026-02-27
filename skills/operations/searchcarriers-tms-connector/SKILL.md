@@ -98,7 +98,7 @@ TMW carrier records use these primary fields:
 
 ```bash
 python3 -c "
-import json, csv, sys, time
+import json, csv, sys, time, os
 
 carrier = json.loads(sys.argv[1])
 
@@ -124,8 +124,9 @@ tmw_row = {
     'HazmatCertified': 'Y' if carrier.get('hm_flag') in [True, 'Y', 'YES', 'true'] else 'N',
 }
 
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
 timestamp = int(time.time())
-outpath = f'/tmp/sc-tmw-import-{timestamp}.csv'
+outpath = os.path.join(outdir, f'sc-tmw-import-{timestamp}.csv')
 fields = list(tmw_row.keys())
 with open(outpath, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fields)
@@ -162,7 +163,7 @@ print(f'TMW import file: {outpath}')
 
 ```bash
 python3 -c "
-import json, csv, sys, time, re
+import json, csv, sys, time, re, os
 
 carrier = json.loads(sys.argv[1])
 
@@ -192,8 +193,9 @@ mcleod_row = {
     'carrier_type': carrier.get('carrier_operation', ''),
 }
 
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
 timestamp = int(time.time())
-outpath = f'/tmp/sc-mcleod-import-{timestamp}.csv'
+outpath = os.path.join(outdir, f'sc-mcleod-import-{timestamp}.csv')
 fields = list(mcleod_row.keys())
 with open(outpath, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fields)
@@ -248,7 +250,7 @@ When the platform is unknown, produce a CSV with the most universally needed fie
 
 ```bash
 python3 -c "
-import json, csv, sys, time
+import json, csv, sys, time, os
 
 carriers = json.loads(sys.argv[1])  # list of carrier objects
 
@@ -264,8 +266,9 @@ fields = [
     'cargo_insurance_on_file', 'bond_insurance_on_file'
 ]
 
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
 timestamp = int(time.time())
-outpath = f'/tmp/sc-tms-import-{timestamp}.csv'
+outpath = os.path.join(outdir, f'sc-tms-import-{timestamp}.csv')
 
 with open(outpath, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fields)
@@ -353,7 +356,7 @@ Carrier Onboarding Summary:
   Status: APPROVED for onboarding
   Vetting: All checks passed
   TMS Format: McLeod (LoadMaster)
-  Import File: /tmp/sc-mcleod-import-1706000000.csv
+  Import File: ./sc-mcleod-import-1706000000.csv
 
   Note: Import this file via McLeod's Carrier Maintenance > Import function.
 ```
@@ -384,9 +387,9 @@ Batch Onboarding Results:
   Conditional: 2 (insurance expiring within 30 days)
   Rejected: 1 (DOT 99999 - authority revoked)
 
-  Import file: /tmp/sc-tmw-import-1706000000.csv (12 carriers)
-  Review file: /tmp/sc-onboard-review-1706000000.csv (2 carriers needing attention)
-  Rejection report: /tmp/sc-onboard-rejected-1706000000.csv (1 carrier)
+  Import file: ./sc-tmw-import-1706000000.csv (12 carriers)
+  Review file: ./sc-onboard-review-1706000000.csv (2 carriers needing attention)
+  Rejection report: ./sc-onboard-rejected-1706000000.csv (1 carrier)
 ```
 
 ### 6. Change Detection and Update Workflow

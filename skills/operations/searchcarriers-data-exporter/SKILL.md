@@ -22,7 +22,7 @@ Raw API responses contain 143 fields per carrier in nested JSON -- useful for ma
 - **Minimum tier**: Pro
 - **Environment variable**: `SEARCHCARRIERS_API_KEY` must be set in the shell environment
 - **Network access**: HTTPS to `searchcarriers.com`
-- **Write access**: Permission to write output files (defaults to `/tmp/` if no path specified)
+- **Write access**: Permission to write output files (defaults to current directory if no path specified)
 
 ## Instructions
 
@@ -35,7 +35,7 @@ Parse the user's request to identify:
 | Carrier(s) | DOT numbers, MC numbers, or company names | Required -- at least one |
 | Format | "CSV", "JSON", "markdown", "report", "comparison" | CSV |
 | Fields | Specific field names or categories (identity, contact, safety, fleet, insurance) | All key fields |
-| Output path | File path mentioned by user | `/tmp/sc-export-{timestamp}.{format}` |
+| Output path | File path mentioned by user | `./sc-export-{timestamp}.{format}` |
 | Related data | "with inspections", "include insurance", "add authority" | None |
 
 ### 2. Fetch Carrier Data
@@ -105,7 +105,7 @@ Flatten the carrier data into a single-row-per-carrier CSV:
 
 ```bash
 python3 -c "
-import json, csv, sys, time
+import json, csv, sys, time, os
 
 # carrier_data should be loaded from the API response
 carriers = json.loads(sys.argv[1]) if len(sys.argv) > 1 else []
@@ -122,8 +122,9 @@ fields = [
     'bipd_insurance_on_file', 'bipd_insurance_required'
 ]
 
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
 timestamp = int(time.time())
-outpath = f'/tmp/sc-export-{timestamp}.csv'
+outpath = os.path.join(outdir, f'sc-export-{timestamp}.csv')
 with open(outpath, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
     writer.writeheader()
@@ -147,7 +148,7 @@ Write filtered or full carrier objects as formatted JSON:
 
 ```bash
 python3 -c "
-import json, time
+import json, time, os
 
 # Load carrier data from API response
 carriers = []  # populated from API calls
@@ -160,8 +161,9 @@ if selected_fields:
 else:
     filtered = carriers
 
+outdir = os.environ.get('SC_OUTPUT_DIR', '.')
 timestamp = int(time.time())
-outpath = f'/tmp/sc-export-{timestamp}.json'
+outpath = os.path.join(outdir, f'sc-export-{timestamp}.json')
 with open(outpath, 'w') as f:
     json.dump(filtered, f, indent=2, default=str)
 
@@ -335,10 +337,10 @@ For multi-carrier exports with related data, warn about rate limits: "Fetching r
 ### 9. Write Output
 
 Default output paths follow this pattern:
-- CSV: `/tmp/sc-export-{timestamp}.csv`
-- JSON: `/tmp/sc-export-{timestamp}.json`
-- Markdown: `/tmp/sc-export-{timestamp}.md`
-- Comparison: `/tmp/sc-comparison-{timestamp}.md`
+- CSV: `./sc-export-{timestamp}.csv`
+- JSON: `./sc-export-{timestamp}.json`
+- Markdown: `./sc-export-{timestamp}.md`
+- Comparison: `./sc-comparison-{timestamp}.md`
 
 If the user specifies a path, use it. Confirm the file was written by reporting the path and file size.
 
@@ -359,7 +361,7 @@ curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
   -H "Accept: application/json"
 ```
 
-Parse the response, flatten to CSV with default key fields, write to `/tmp/sc-export-{timestamp}.csv`.
+Parse the response, flatten to CSV with default key fields, write to `./sc-export-{timestamp}.csv`.
 
 ### Example 2: Multi-Carrier Comparison
 
@@ -407,7 +409,7 @@ Filter each carrier object to only: `legal_name`, `dot_number`, `phone`, `email_
 
 **User**: "Generate a carrier report for DOT 12345"
 
-Fetch full carrier data, build the markdown report template from section 6, write to `/tmp/sc-export-{timestamp}.md`, and display the report inline.
+Fetch full carrier data, build the markdown report template from section 6, write to `./sc-export-{timestamp}.md`, and display the report inline.
 
 ## Error Handling
 
@@ -427,7 +429,7 @@ Fetch full carrier data, build the markdown report template from section 6, writ
 - Unicode characters in company names: Ensure UTF-8 encoding on all output files.
 
 **File write errors:**
-- Permission denied: Fall back to `/tmp/` and inform the user.
+- Permission denied: Inform the user and suggest they specify a writable output path.
 - Disk full: Report the error; suggest a different output path.
 
 ## Resources

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- LICENSE file (BSL 1.1, change date 2030-02-26, Apache 2.0 after)
+
 ### Fixed
 - pyproject.toml: removed unused setuptools-scm, added `packages = []` to fix editable install
 - README.md tier matrix: Contact Verifier corrected to Pro (was SMB), TMS Sync corrected to Enterprise-only (was SMB)
@@ -14,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - validate.sh: fixed `find` alias conflict (use /usr/bin/find), fixed `set -e` with `$VERBOSE &&` pattern
 - Added workflows/ to validator and test fixture scan paths
 - Added embedded skills and workflow skills to skills_inventory.csv (12 new entries)
+- API endpoints: corrected flat pattern (/authorities) to path pattern (/company/{dot}/authorities) in 4 MCP servers
+- Insurance validation: fixed sum vs max logic for BIPD minimum coverage check
+- Risk engine SKILL.md: weight model table now matches actual additive penalty implementation
+- Removed `/tmp/` hardcoded output paths from 3 standalone skills (tms-connector, data-exporter, bulk-processor); now use `SC_OUTPUT_DIR` env var or current directory
+- Removed "real-time" claims from api-bridge architecture doc and risk-engine SCHEMA.md
+- Fixed api-bridge README claiming parallel execution (actual design is sequential with rate limiting)
+
+### Changed
+- All 5 business cases: "ROI Calculation" renamed to "Efficiency Gains", removed unsupported dollar/percentage claims
+- All 5 PRDs: success metrics prefixed with "Target:" (goals, not measured results)
+- README: replaced "actionable freight intelligence" with "structured carrier data", rewrote architecture note to be factual
+- User journeys: removed specific time-savings claims, fixed api-bridge TMS journey to match v0.1 reality
 
 ## [0.1.0] - 2026-02-26
 

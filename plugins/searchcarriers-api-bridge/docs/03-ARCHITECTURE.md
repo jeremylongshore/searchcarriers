@@ -8,7 +8,7 @@ API Bridge is a **STANDALONE** integration plugin. It does not participate in th
                     SEARCHCARRIERS PLUGIN ECOSYSTEM
   =====================================================================
 
-  STACKABLE PIPELINE (per-carrier, real-time)
+  STACKABLE PIPELINE (per-carrier, on-demand)
   +-------------------+    +------------------+    +-------------------+
   | CARRIER INTEL     |--->| RISK ENGINE      |--->| OPS REPORTER      |
   | (INPUT)           |    | (ANALYSIS)       |    | (OUTPUT)           |

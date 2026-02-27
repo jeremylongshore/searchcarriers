@@ -49,8 +49,8 @@ python3 plugins/searchcarriers-api-bridge/scripts/api_bridge_mcp.py
 
 ## Bulk Processing
 
-Process up to 100 carriers per batch with rate-limited parallel execution:
-- Batches of 10 concurrent requests
+Process up to 100 carriers per batch with rate-limited sequential execution:
+- Token bucket rate limiter (3 requests/second)
 - Automatic rate limit respect
 - Per-carrier error isolation (one failure doesn't block others)
 - Configurable data sections (basics, authorities, insurances, equipment)

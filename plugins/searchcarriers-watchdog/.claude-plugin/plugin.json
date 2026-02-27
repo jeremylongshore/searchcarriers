@@ -1,0 +1,33 @@
+{
+  "name": "searchcarriers-watchdog",
+  "description": "Carrier watch list management, change alerts, alert routing to Slack/Telegram/email, and compliance drift monitoring.",
+  "version": "0.1.0",
+  "type": "mcp",
+  "pipeline_stage": "monitoring",
+  "min_tier": "proplus",
+  "tools": [
+    {
+      "name": "manage_watchlist",
+      "description": "Add, remove, or list carriers on the Carrier Watch monitoring list.",
+      "min_tier": "proplus"
+    },
+    {
+      "name": "get_alerts",
+      "description": "Pull recent Carrier Watch alerts for safety, insurance, and authority changes.",
+      "min_tier": "proplus"
+    },
+    {
+      "name": "route_alert",
+      "description": "Push alerts to Slack, Telegram, email, or webhook endpoints.",
+      "min_tier": "proplus"
+    },
+    {
+      "name": "monitor_compliance",
+      "description": "Detect compliance drift over time for watched carriers.",
+      "min_tier": "proplus"
+    }
+  ],
+  "author": "Jeremy Longshore <jeremy@intentsolutions.io>",
+  "license": "BUSL-1.1",
+  "repository": "https://github.com/intent-solutions-io/searchcarriers"
+}

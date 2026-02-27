@@ -20,7 +20,7 @@ The data is public. The endpoints exist. The problem is not access -- it is work
 | Safety departments | Safety directors, compliance analysts | High | 10-30 lookups/day |
 | Insurance underwriters | Motor carrier underwriting teams | Medium | 5-15 lookups/day |
 
-The primary buyer is the freight brokerage with 10 to 500 employees. They have the highest lookup volume, the most to lose from onboarding a bad carrier, and the most to gain from automation. A single cargo claim from a poorly vetted carrier can cost $50,000 to $250,000. The ROI on faster, more accurate vetting is immediate and measurable.
+The primary buyer is the freight brokerage with 10 to 500 employees. They have the highest lookup volume, the most to lose from onboarding a bad carrier, and the most to gain from automation. A single cargo claim from a poorly vetted carrier can cost $50,000 to $250,000. Faster, more accurate vetting directly reduces that exposure.
 
 ## Market Size
 
@@ -28,19 +28,18 @@ The primary buyer is the freight brokerage with 10 to 500 employees. They have t
 - **SAM**: Organizations already using or willing to adopt API-based carrier data tools. Estimated 8,000 to 12,000 companies currently using Carrier411, Highway, DAT carrier monitoring, or similar paid vetting tools.
 - **SOM**: SearchCarriers existing user base plus new users attracted by the Claude Code integration. Year 1 target: 200 to 500 active API subscribers driven by plugin adoption.
 
-## ROI Calculation
+## Efficiency Gains
 
 | Metric | Without Plugin | With Plugin | Impact |
 |--------|---------------|-------------|--------|
-| Time per carrier lookup | 15-30 min (manual SAFER/FMCSA) | 10-15 sec (natural language) | 98% reduction |
+| Time per carrier lookup | 15-30 min (manual SAFER/FMCSA) | 10-15 sec (natural language) | Significantly faster |
 | Lookups per day (50-person brokerage) | 40-60 | 40-60 (same volume) | Same throughput, freed labor |
-| Daily hours on carrier research | 13-20 hours | 0.2-0.4 hours | 12-19 hours saved daily |
-| Monthly labor savings (at $25/hr) | - | $6,500-$10,000 | Direct payroll offset |
-| Data accuracy (manual copy errors) | 3-5% error rate | 0% (API-direct) | Eliminates transcription errors |
-| Carrier profile completeness | 60-70% (brokers skip fields) | 100% (automated aggregation) | Better vetting decisions |
-| Time to full profile (with authorities + insurance) | 25-45 min | 3-5 sec | Enables real-time vetting |
+| Daily hours on carrier research | 13-20 hours | Estimated minutes | Hours of manual work eliminated |
+| Data accuracy (manual copy errors) | Error-prone (manual transcription) | API-direct (no transcription) | Eliminates transcription errors |
+| Carrier profile completeness | Partial (brokers skip fields under time pressure) | Full (automated aggregation) | Better vetting decisions |
+| Time to full profile (with authorities + insurance) | 25-45 min | Seconds (API-speed) | On-demand full profiles |
 
-For a mid-size brokerage spending $8,000/month on carrier research labor, the SearchCarriers Pro subscription ($99-199/month) pays for itself within the first week.
+The primary efficiency gain is eliminating manual data gathering. Brokers spend their time evaluating carriers instead of copy-pasting data between browser tabs.
 
 ## Competitive Positioning
 
@@ -52,11 +51,11 @@ For a mid-size brokerage spending $8,000/month on carrier research labor, the Se
 | Entity mapping (VIN-based) | Yes (find related companies) | No | No | Limited | No |
 | Pipeline chaining | Yes (auto-feeds Risk Engine and Ops Reporter) | No | No | No | No |
 | 4M+ carrier database | Yes | Yes (same FMCSA source) | Yes | Yes | Yes |
-| Real-time API access | Yes (REST API) | No (web scraping fragile) | Yes | Yes | Yes |
+| On-demand API access | Yes (REST API) | No (web scraping fragile) | Yes | Yes | Yes |
 | Price (entry tier) | Free (basic lookup) | Free (slow, unreliable) | $35/mo+ | $99/mo+ | Included with DAT |
 | Works in terminal/IDE | Yes | No | No | No | No |
 
-**Key differentiator**: No other carrier data tool integrates with a developer's existing workflow. Brokers who use Claude Code (or whose tech teams build tools on Claude Code) get carrier intelligence without leaving their terminal. The plugin turns carrier research from a context switch into a conversation.
+**Key differentiator**: No other carrier data tool integrates with a developer's existing workflow. Brokers who use Claude Code (or whose tech teams build tools on Claude Code) get carrier data without leaving their terminal. The plugin turns carrier research from a context switch into a conversation.
 
 **Secondary differentiator**: Pipeline architecture. Carrier Intel is not a standalone tool -- it is the INPUT stage of a three-stage pipeline. Data flows automatically from lookup (Carrier Intel) to risk assessment (Risk Engine) to formatted report (Ops Reporter). No other carrier data platform offers this kind of automated chaining.
 
@@ -85,4 +84,4 @@ Carrier Intel drives SearchCarriers API subscription revenue through a tiered ac
 | FMCSA source changes | Low | High -- upstream schema changes break field mappings | SearchCarriers abstracts FMCSA, so this risk is on their side. Monitor for carrier object field changes |
 | Competitor replication | Medium | Low -- anyone can wrap FMCSA data | Our moat is the pipeline architecture + Claude Code integration, not the raw data access |
 | Claude Code platform changes | Low | High -- MCP protocol changes could break plugin | Pin MCP protocol version, maintain backward compatibility, follow Anthropic's plugin changelog |
-| Low adoption / market fit | Medium | Medium -- developers may not be the buyers | Target tech-forward brokerages first, provide clear ROI documentation for procurement justification |
+| Low adoption / market fit | Medium | Medium -- developers may not be the buyers | Target tech-forward brokerages first, provide clear efficiency documentation for procurement justification |

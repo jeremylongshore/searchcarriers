@@ -30,18 +30,17 @@ The primary buyer is the operations manager or compliance lead at a mid-size 3PL
 
 The market opportunity is not in competing head-to-head with established monitoring platforms. It is in providing carrier monitoring to organizations that already use SearchCarriers for carrier research and want monitoring integrated into the same workflow. Watchdog converts existing SearchCarriers users from one-time lookup customers into ongoing monitoring subscribers.
 
-## ROI Calculation
+## Efficiency Gains
 
 | Metric | Without Watchdog | With Watchdog | Impact |
 |--------|-----------------|---------------|--------|
-| Time to detect carrier status change | Days to months (next re-qualification cycle) | < 30 seconds (next alert poll) | Real-time awareness |
-| Insurance lapse detection | At claim time (too late) | Same day as lapse | Prevents uninsured loads |
-| Cargo claims from lapsed coverage | 2-5 per year at mid-size brokerage | Near zero (early warning) | $100K-$250K annual savings |
-| Compliance audit preparation | 2-4 weeks (manual documentation) | Instant (compliance drift history) | Audit readiness on demand |
-| Manual carrier status checks | 200 carriers x 15 min/quarter = 50 hours | Automated monitoring, zero manual checks | 50 hours saved per quarter |
-| Alert response time | Hours to days (email buried in inbox) | Minutes (Slack/Telegram real-time) | Faster operational response |
+| Time to detect carrier status change | Days to months (next re-qualification cycle) | Within nightly sync cycle (next alert poll) | Significantly faster detection |
+| Insurance lapse detection | Often discovered at claim time | Same day as lapse appears in FMCSA data | Earlier warning |
+| Compliance audit preparation | Weeks (manual documentation) | On-demand (compliance drift history) | Faster audit readiness |
+| Manual carrier status checks | 200 carriers x 15 min/quarter = 50 hours | Automated monitoring, no manual checks | Eliminates manual status checks |
+| Alert response time | Hours to days (email buried in inbox) | Minutes (Slack/Telegram routing) | Faster operational response |
 
-For a brokerage that experiences one cargo claim per year from an undetected insurance lapse ($50K average), the Pro+ subscription at $99/month ($1,188/year) pays for itself 40 times over. Even preventing a single authority-related load rejection saves the cost of re-brokering a load ($500-$2,000 per incident).
+The primary value is shifting from reactive to proactive carrier monitoring. Instead of discovering status changes during the next re-qualification cycle (or worse, after an incident), Watchdog surfaces changes as soon as they appear in the FMCSA data that SearchCarriers syncs nightly.
 
 ## Competitive Positioning
 
@@ -51,7 +50,7 @@ For a brokerage that experiences one cargo claim per year from an undetected ins
 | Multi-channel alert routing | Yes (Slack, Telegram, email, webhook) | Email only | Email, in-app | Email, in-app | Email |
 | Compliance drift over time | Yes (trend detection) | No | Limited | No | Yes (enterprise) |
 | Programmable alert formatting | Yes (per-channel formatting) | No | No | No | API only |
-| Real-time FMCSA data | Yes (nightly sync, intraday for critical) | Nightly batch | Real-time | Nightly | Daily |
+| Current FMCSA data (nightly sync) | Yes (nightly sync via SearchCarriers) | Nightly batch | On-demand | Nightly | Daily |
 | Pipeline integration | No (standalone -- works alongside pipeline plugins) | Standalone | Standalone | Standalone | Standalone |
 | Price | $99/mo (Pro+) | $35/mo+ | $99/mo+ | Included with DAT | $200/mo+ |
 
@@ -66,7 +65,7 @@ Watchdog is a standalone monitoring plugin that drives Pro+ tier subscription re
 | Plugin Tool | Min Tier | Revenue Driver |
 |------------|----------|----------------|
 | `manage_watchlist` | Pro+ ($99/mo) | Gateway to monitoring -- users must add carriers before they get alerts |
-| `get_alerts` | Pro+ ($99/mo) | Core value prop -- real-time change detection |
+| `get_alerts` | Pro+ ($99/mo) | Core value prop -- automated change detection |
 | `route_alert` | Pro+ ($99/mo) | Operational integration -- alerts in the tools teams already use |
 | `monitor_compliance` | Pro+ ($99/mo) | Enterprise value -- audit readiness and trend analysis |
 
@@ -80,7 +79,7 @@ Watchdog is a standalone monitoring plugin that drives Pro+ tier subscription re
 |------|-----------|--------|-----------|
 | Alert fatigue | High | Medium -- too many low-priority alerts cause users to ignore them | Alert categorization (critical/warning/info), configurable thresholds, digest mode for non-critical changes |
 | Alert delivery reliability | Medium | High -- missed critical alert defeats the purpose | Format-only architecture (user's delivery infrastructure handles reliability), retry guidance in docs |
-| Data freshness lag | Medium | Medium -- 24-48 hour FMCSA sync delay means some changes are not instant | Document sync frequency, timestamp all alerts, set expectations that this is nightly-batch monitoring not real-time FMCSA polling |
+| Data freshness lag | Medium | Medium -- 24-48 hour FMCSA sync delay means some changes are not instant | Document sync frequency, timestamp all alerts, set expectations that this is nightly-batch monitoring, not live FMCSA polling |
 | Carrier Watch API availability | Medium | High -- Watchdog depends on SearchCarriers Carrier Watch API | Retry logic, clear error messages, status page link |
 | False positive alerts | Low | Medium -- alerting on changes that did not actually happen | Validate change data against carrier profile, include before/after values in alerts |
 | Regulatory concern about automated monitoring | Low | Low -- monitoring public FMCSA data is standard industry practice | All data is public record; document that Watchdog monitors, it does not surveil |

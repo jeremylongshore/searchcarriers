@@ -2,7 +2,7 @@
 
 **Motor carrier intelligence for Claude Code.**
 
-Search, vet, and monitor 4M+ motor carriers directly from your terminal. Five plugins and fourteen skills turn raw FMCSA data into actionable freight intelligence -- carrier lookups, risk scoring, vetting reports, compliance monitoring, and TMS integration, all through natural language.
+Search, vet, and monitor 4M+ motor carriers directly from your terminal. Five plugins and fourteen skills provide structured carrier data -- carrier lookups, risk scoring, vetting reports, compliance monitoring, and TMS integration, all through natural language.
 
 Built for freight brokers, safety teams, and logistics ops who need answers, not dashboards.
 
@@ -86,7 +86,7 @@ The three stackable plugins chain together automatically. Claude routes data thr
 
 ## Skill Catalog
 
-14 skills organized by category. Each skill is a standalone `.md` file that teaches Claude domain-specific freight intelligence.
+14 skills organized by category. Each skill is a standalone `.md` file that teaches Claude domain-specific freight data interpretation.
 
 ### Search & Discovery
 
@@ -192,7 +192,7 @@ Full API documentation, schemas, and field references: **[API-DISCOVERY.md](API-
 
 ## Premium Workflows
 
-Paid add-on workflows that chain multiple plugins together for automated intelligence.
+Paid add-on workflows that chain multiple plugins together for automated carrier monitoring and reporting.
 
 ### Pro Tier
 
@@ -209,7 +209,7 @@ Paid add-on workflows that chain multiple plugins together for automated intelli
 | Slack Carrier Watch | Route all Carrier Watch alerts to Slack with formatted cards | watchdog |
 | Telegram Bot Lookup | `/dot 12345` in Telegram returns carrier summary | carrier-intel + api-bridge |
 | Compliance Dashboard Email | Weekly compliance report across all watched carriers | ops-reporter + watchdog |
-| Insurance Lapse Alert | Instant Slack/email when insurance cancellation is detected | watchdog + risk-engine |
+| Insurance Lapse Alert | Slack/email when insurance cancellation is detected | watchdog + risk-engine |
 
 ### SMB / Enterprise Tier
 
@@ -218,7 +218,7 @@ Paid add-on workflows that chain multiple plugins together for automated intelli
 | Bulk Vetting Pipeline | Upload CSV of 500+ carriers, get back vetting report with pass/fail | api-bridge + risk-engine + ops-reporter |
 | TMS Auto-Sync | Carrier status change auto-updates carrier record in TMS | api-bridge + watchdog |
 | Fleet Risk Dashboard | Automated weekly fleet risk analysis pushed to Slack/email | carrier-intel + risk-engine + ops-reporter + watchdog |
-| Competitive Intel | Monitor competitor carrier panels, alert on changes | carrier-intel + watchdog |
+| Carrier Panel Monitor | Monitor carrier panels, alert on changes | carrier-intel + watchdog |
 | Automated Onboarding | New carrier added to TMS triggers full vetting pipeline, results emailed to ops | api-bridge + risk-engine + ops-reporter |
 
 ---
@@ -358,13 +358,13 @@ Skills follow the `/skill-creator` specification. Required sections in every SKI
 
 ## Architecture Note
 
-**Thin wrapper + thick intelligence.**
+**Thin MCP servers + structured skills.**
 
-Our MCP servers are thin API callers. They hit SearchCarriers endpoints and return raw data. No business logic duplication. No data transformation. Thin.
+The MCP servers are thin API callers. They hit SearchCarriers endpoints and return raw data. No business logic duplication. No data transformation.
 
-Our skills are where the value lives. They teach Claude how to interpret raw FMCSA data ("is this carrier safe?" not just numbers), chain lookups into pipelines (search -> inspect -> assess -> report), apply custom vetting rules (min power units, max crash rate), format human-readable reports from 143-field carrier objects, and make pass/review/fail decisions that turn data into judgment.
+The skills layer is where interpretation happens. Skills teach Claude how to read raw FMCSA data and explain it in plain language, chain lookups into pipelines (search -> inspect -> assess -> report), apply configurable vetting rules (min power units, max crash rate), format human-readable reports from 143-field carrier objects, and produce pass/review/fail recommendations.
 
-The API gives you data. We give you intelligence.
+In short: the API returns carrier records, the skills layer adds interpretation, chaining, formatting, and judgment.
 
 ---
 

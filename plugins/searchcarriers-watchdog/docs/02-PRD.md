@@ -3,7 +3,7 @@
 ## Goals
 
 1. **Enable carrier watch list management from Claude Code.** A user types "add DOT 69494 to my watch list" and the carrier is monitored for changes without leaving the terminal. List, add, and remove operations complete in under 3 seconds.
-2. **Surface carrier changes as actionable alerts.** When a watched carrier's insurance lapses, authority changes, or safety record shifts, Watchdog detects the change and presents it with clear severity classification. Alert retrieval completes in under 5 seconds.
+2. **Surface carrier changes as classified alerts.** When a watched carrier's insurance lapses, authority changes, or safety record shifts, Watchdog detects the change and presents it with clear severity classification. Alert retrieval completes in under 5 seconds.
 3. **Route alerts to the channels teams already use.** Slack, Telegram, email, and webhook -- Watchdog formats alerts for each channel's native message format. Formatted alerts are returned to Claude for delivery; Watchdog does not send messages directly.
 4. **Track compliance drift over time.** Beyond point-in-time alerts, Watchdog shows whether a carrier's compliance posture is improving, stable, or deteriorating. This longitudinal view is what compliance managers and auditors need.
 
@@ -221,13 +221,13 @@ Deferred to v0.2.0:
 
 | Metric | Target | How Measured |
 |--------|--------|-------------|
-| Alert retrieval latency | < 3 seconds | Timer in MCP tool handler |
-| Watch list operation latency | < 2 seconds | Timer per add/remove/list |
-| Alert formatting latency | < 500 milliseconds | Timer in route_alert handler |
-| Compliance drift computation | < 5 seconds | Timer across history retrieval + analysis |
-| Missed critical alerts | 0 (every critical change surfaces) | Integration tests against known change events |
-| Tier gate accuracy | 100% (no non-Pro+ user accesses tools) | Unit tests |
-| Alert severity accuracy | > 95% correct classification | Manual review of alert classification against FMCSA change types |
+| Alert retrieval latency | Target: < 3 seconds | Timer in MCP tool handler |
+| Watch list operation latency | Target: < 2 seconds | Timer per add/remove/list |
+| Alert formatting latency | Target: < 500 milliseconds | Timer in route_alert handler |
+| Compliance drift computation | Target: < 5 seconds | Timer across history retrieval + analysis |
+| Missed critical alerts | Target: 0 (every critical change surfaces) | Integration tests against known change events |
+| Tier gate accuracy | Target: 100% (no non-Pro+ user accesses tools) | Unit tests |
+| Alert severity accuracy | Target: > 95% correct classification | Manual review of alert classification against FMCSA change types |
 
 ## Dependencies
 

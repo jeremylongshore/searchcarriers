@@ -212,13 +212,13 @@ Deferred to v0.2.0:
 
 | Metric | Target | How Measured |
 |--------|--------|-------------|
-| Report generation latency | < 5 seconds (including upstream data fetch) | Timer in MCP tool handler |
-| Comparison generation latency | < 10 seconds (2-5 carriers) | Timer across data fetch + formatting |
-| Export generation latency | < 2 seconds | Timer in MCP tool handler |
-| Report completeness | 100% of available data sections populated | Section presence check in output |
-| Format validity (JSON) | 100% valid JSON | JSON parse test on every export |
-| Format validity (CSV) | 100% parseable CSV | CSV parse test on every export |
-| Tier gate accuracy | 100% (no Free user accesses any Ops Reporter tool) | Integration tests |
+| Report generation latency | Target: < 5 seconds (including upstream data fetch) | Timer in MCP tool handler |
+| Comparison generation latency | Target: < 10 seconds (2-5 carriers) | Timer across data fetch + formatting |
+| Export generation latency | Target: < 2 seconds | Timer in MCP tool handler |
+| Report completeness | Target: 100% of available data sections populated | Section presence check in output |
+| Format validity (JSON) | Target: 100% valid JSON | JSON parse test on every export |
+| Format validity (CSV) | Target: 100% parseable CSV | CSV parse test on every export |
+| Tier gate accuracy | Target: 100% (no Free user accesses any Ops Reporter tool) | Integration tests |
 
 ## Dependencies
 

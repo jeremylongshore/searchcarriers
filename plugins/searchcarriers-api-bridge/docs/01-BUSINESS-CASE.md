@@ -29,17 +29,17 @@ The primary buyer is the IT director or systems integrator at a freight brokerag
 
 The API Bridge market is smaller than Carrier Intel (fewer companies need batch operations than need individual lookups) but higher revenue per customer. A single Enterprise subscriber at $499/month generates more annual revenue than 60 Free-tier Carrier Intel users.
 
-## ROI Calculation
+## Efficiency Gains
 
 | Metric | Without API Bridge | With API Bridge | Impact |
 |--------|-------------------|-----------------|--------|
-| Quarterly panel re-qualification (500 carriers) | 3 days manual | 12 minutes (bulk_lookup) | 97% time reduction |
-| TMS data import per carrier | 10-15 min (manual re-keying) | 0 min (tms_sync export) | Eliminates re-keying entirely |
-| API outage detection | When dispatch complains | Real-time (api_health) | Proactive vs. reactive |
+| Quarterly panel re-qualification (500 carriers) | Days of manual work | Estimated minutes (bulk_lookup) | Eliminates manual per-carrier lookups |
+| TMS data import per carrier | 10-15 min (manual re-keying) | Automated (tms_sync export) | Eliminates re-keying entirely |
+| API outage detection | When dispatch complains | On-demand (api_health) | Proactive vs. reactive |
 | Carrier Watch webhook setup | Web UI, manual per-endpoint | CLI bulk management | Faster configuration |
-| Monthly labor on carrier data management | 40-60 hours (mid-size brokerage) | 2-4 hours | $1,500-$2,500/month savings at $40/hr |
+| Monthly labor on carrier data management | Significant (mid-size brokerage) | Substantially reduced | Frees analyst time for higher-value work |
 
-For a mid-size brokerage spending $2,000/month on carrier data management labor, the SMB subscription ($199/month) pays for itself in the first week. Enterprise customers ($499/month) who add TMS sync eliminate the entire manual re-keying workflow -- a process that introduces 3-5% transcription errors and costs $3,000-$5,000/month in analyst time at scale.
+The primary value is turning batch carrier operations from a multi-day manual process into an automated workflow. Enterprise customers who add TMS sync eliminate the manual re-keying step entirely -- removing a common source of transcription errors.
 
 ## Competitive Positioning
 
@@ -49,7 +49,7 @@ For a mid-size brokerage spending $2,000/month on carrier data management labor,
 | TMS-formatted export | Yes (McLeod, TMW, CSV) | Manual reformatting | CSV only | API/JSON | CSV/PDF |
 | API health monitoring | Yes (endpoint-level) | No | No | Status page only | No |
 | Webhook management via CLI | Yes (CRUD) | Web UI only | N/A | N/A | N/A |
-| Rate limit visibility | Yes (real-time) | No | No | No | No |
+| Rate limit visibility | Yes (on-demand) | No | No | No | No |
 | Works in terminal/IDE | Yes (Claude Code native) | No | No | No | No |
 
 **Key differentiator**: API Bridge is the only carrier data integration tool that operates from a developer's terminal. IT teams building carrier data pipelines get bulk operations, TMS formatting, health monitoring, and webhook management without writing custom integration code or navigating web dashboards.
@@ -80,4 +80,4 @@ API Bridge drives SMB and Enterprise tier subscription revenue:
 | Webhook endpoint reliability | Medium | Low -- webhook delivery is SearchCarriers server-side | API Bridge only manages configuration, not delivery; document this boundary |
 | API key permission scope | Low | High -- bulk operations amplify the impact of a compromised key | Document minimum required scopes, recommend key rotation schedule |
 | Large batch timeouts | Medium | Medium -- 100 DOTs with full profiles could exceed MCP tool timeout | Chunked processing with progress callbacks, configurable batch size |
-| Enterprise pricing resistance | Medium | Medium -- $499/month is a premium tier | ROI documentation shows payback in first week; TMS sync value is immediately quantifiable |
+| Enterprise pricing resistance | Medium | Medium -- $499/month is a premium tier | Document concrete efficiency gains; TMS sync value is quantifiable per-organization |

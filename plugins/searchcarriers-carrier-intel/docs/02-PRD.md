@@ -2,7 +2,7 @@
 
 ## Goals
 
-1. **Enable natural language carrier research.** A user types "look up Werner Enterprises" or "find DOT 69494" and gets structured carrier intelligence in seconds, without leaving Claude Code.
+1. **Enable natural language carrier research.** A user types "look up Werner Enterprises" or "find DOT 69494" and gets structured carrier data in seconds, without leaving Claude Code.
 2. **Reduce carrier lookup time from minutes to seconds.** Single lookups complete in under 3 seconds. Full profiles (search + authorities + insurance) complete in under 5 seconds.
 3. **Standardize output for downstream plugins.** Every tool produces structured JSON that the Risk Engine and Ops Reporter can consume without transformation. Carrier Intel is the INPUT stage -- its output is the pipeline's raw material.
 4. **Make the Free tier genuinely useful.** Three of four tools work on Free. Users experience real value before hitting any paywall.
@@ -166,13 +166,13 @@ Deferred to v0.2.0:
 
 | Metric | Target | How Measured |
 |--------|--------|-------------|
-| Single lookup latency | < 1 second | Timer in MCP tool handler |
-| Profile aggregation latency | < 3 seconds | Timer across 3 API calls |
-| Entity map latency (10 VINs) | < 10 seconds | Timer across equipment + VIN searches |
-| Error rate (unhandled exceptions) | 0% | Exception logging in MCP server |
-| Tier gate accuracy | 100% (no Free user accesses Pro tools) | Integration tests |
-| API call efficiency | 0 wasted calls (tier check before API) | Request counter |
-| User satisfaction | Lookup replaces manual SAFER workflow | User feedback |
+| Single lookup latency | Target: < 1 second | Timer in MCP tool handler |
+| Profile aggregation latency | Target: < 3 seconds | Timer across 3 API calls |
+| Entity map latency (10 VINs) | Target: < 10 seconds | Timer across equipment + VIN searches |
+| Error rate (unhandled exceptions) | Target: 0% | Exception logging in MCP server |
+| Tier gate accuracy | Target: 100% (no Free user accesses Pro tools) | Integration tests |
+| API call efficiency | Target: 0 wasted calls (tier check before API) | Request counter |
+| User satisfaction | Target: lookup replaces manual SAFER workflow | User feedback |
 
 ## Dependencies
 

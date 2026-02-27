@@ -18,7 +18,7 @@ The data to make better decisions already exists. Safety scores, inspection resu
 | Compliance managers | Safety, regulatory compliance | Critical | 10-30 audits/day |
 | Insurance underwriters | Motor carrier underwriting | High | 5-15 risk assessments/day |
 
-The primary buyer is the freight brokerage compliance department or the broker-principal who carries personal liability for carrier selection. A single bad carrier decision -- revoked authority, lapsed insurance, chameleon entity -- can trigger cargo claims, FMCSA fines, and loss of contingent cargo coverage. The ROI on automated risk scoring is not about saving time. It is about not writing six-figure checks.
+The primary buyer is the freight brokerage compliance department or the broker-principal who carries personal liability for carrier selection. A single bad carrier decision -- revoked authority, lapsed insurance, chameleon entity -- can trigger cargo claims, FMCSA fines, and loss of contingent cargo coverage. Automated risk scoring reduces the chance of onboarding a carrier with known red flags in public FMCSA data.
 
 ## Market Size
 
@@ -26,18 +26,16 @@ The primary buyer is the freight brokerage compliance department or the broker-p
 - **SAM**: ~8,000-12,000 companies currently paying for carrier vetting tools (Carrier411, Highway, RMIS, SaferWatch). These organizations already spend money on carrier qualification.
 - **SOM**: SearchCarriers existing user base converting from Free (Carrier Intel) to Pro/Pro+ for risk scoring and vetting. Year 1 target: 100-300 Pro/Pro+ subscribers driven by Risk Engine adoption.
 
-## ROI Calculation
+## Efficiency Gains
 
 | Metric | Without Risk Engine | With Risk Engine | Impact |
 |--------|-------------------|-----------------|--------|
-| Time per carrier risk assessment | 15-30 min (manual) | 3-5 sec (automated) | 99% reduction |
+| Time per carrier risk assessment | 15-30 min (manual) | Seconds (automated) | Significantly faster |
 | Assessment consistency | Varies by person, mood, workload | Same algorithm every time | Eliminates human inconsistency |
-| False negatives (bad carrier cleared) | 5-10% estimated | <2% target | 60-80% reduction in missed risks |
-| Annual cargo claims (50-person brokerage) | $200K-$500K | $80K-$200K (estimated) | 50-60% reduction |
-| Compliance audit readiness | Manual documentation | Structured audit trail | Instant audit evidence |
-| Insurance premium impact | Standard rates | Potential 5-15% reduction with documented vetting | Direct cost savings |
+| Compliance audit readiness | Manual documentation | Structured audit trail | Faster audit preparation |
+| Insurance documentation | Ad hoc checks | Systematic gap detection | More thorough vetting records |
 
-For a brokerage spending $300K/year on cargo claims, reducing that by even 30% through better carrier vetting saves $90K. The Pro subscription at $49/month costs $588/year per seat. A 5-seat deployment costs $2,940 against $90K in avoided claims.
+The primary value is consistency and speed. Manual risk assessment is slow and subjective -- it depends on who does it, how busy they are, and what they remember to check. Automated scoring applies the same weighted criteria to every carrier, every time. This does not guarantee better outcomes, but it eliminates the variability in the vetting process and creates a documented audit trail.
 
 ## Competitive Positioning
 
@@ -47,7 +45,7 @@ For a brokerage spending $300K/year on cargo claims, reducing that by even 30% t
 | Configurable vetting rules | Yes (Pro+) | Limited | Yes | Yes | Limited |
 | Insurance gap detection | Yes | Manual check | Yes | Yes | Basic |
 | MCS-150 compliance audit | Yes | No | Limited | No | No |
-| Real-time FMCSA data | Yes (via SearchCarriers API) | Nightly batch | Real-time | Daily batch | Nightly batch |
+| Current FMCSA data (nightly sync) | Yes (via SearchCarriers API) | Nightly batch | On-demand | Daily batch | Nightly batch |
 | Pipeline integration | Yes (Carrier Intel -> Risk Engine -> Ops Reporter) | Standalone | Standalone | Standalone | Standalone |
 | CLI / developer workflow | Yes (Claude Code native) | No | No | No | No |
 | Price (risk scoring) | $49/mo (Pro) | $35/mo+ | $99/mo+ | $200/mo+ | $15/mo+ |
@@ -67,7 +65,7 @@ Risk Engine is the primary upsell from Free-tier Carrier Intel to paid subscript
 | `compliance_audit` | Pro | $49/mo | Regulatory compliance posture |
 | `vetting_check` | Pro+ | $99/mo | Custom rules engine -- enterprise upsell |
 
-**Conversion funnel**: Users discover SearchCarriers through Carrier Intel (Free). They look up a carrier, see the data, and immediately want to know "is this carrier safe?" That question is the Risk Engine's entry point. The Free tier shows the raw data; Pro tier interprets it into actionable risk scores. Pro+ adds custom vetting rules for organizations that need configurable qualification criteria.
+**Conversion funnel**: Users discover SearchCarriers through Carrier Intel (Free). They look up a carrier, see the data, and immediately want to know "is this carrier safe?" That question is the Risk Engine's entry point. The Free tier shows the raw data; Pro tier interprets it into structured risk scores. Pro+ adds custom vetting rules for organizations that need configurable qualification criteria.
 
 **Downstream revenue**: Users who adopt risk scoring naturally want formatted vetting reports (Ops Reporter, Pro). The three-plugin pipeline creates a natural progression: look up (Free) -> assess risk (Pro) -> generate report (Pro) -> custom rules (Pro+).
 

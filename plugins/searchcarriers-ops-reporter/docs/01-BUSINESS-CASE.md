@@ -24,19 +24,18 @@ The data exists. The analysis exists (thanks to Carrier Intel and Risk Engine). 
 
 The primary buyer is the compliance manager at a mid-size brokerage or 3PL. She is the person who turns raw carrier data into the vetting packet that goes to operations, account management, and legal. Today she does it in Word and Excel. Tomorrow she types one command and gets a professional report with risk scores, insurance validation, and a qualification verdict already embedded.
 
-## ROI Calculation
+## Efficiency Gains
 
 | Metric | Without Ops Reporter | With Ops Reporter | Impact |
 |--------|---------------------|-------------------|--------|
-| Time per vetting report | 30-60 min (manual assembly) | 3-5 sec (automated) | 99% reduction |
-| Time per carrier comparison (3 carriers) | 45-90 min (manual spreadsheet) | 5-10 sec (automated) | 99% reduction |
-| Time per data export for TMS | 10-20 min (manual re-keying) | 2-3 sec (automated) | 99% reduction |
+| Time per vetting report | 30-60 min (manual assembly) | Seconds (automated) | Eliminates manual assembly |
+| Time per carrier comparison (3 carriers) | 45-90 min (manual spreadsheet) | Seconds (automated) | Eliminates manual comparison building |
+| Time per data export for TMS | 10-20 min (manual re-keying) | Seconds (automated) | Eliminates manual re-keying |
 | Report format consistency | Varies by author | Identical every time | Eliminates format drift |
-| Data accuracy in exports | 3-5% transcription error rate | 0% (structured output) | Eliminates human error |
-| Reports per compliance analyst per day | 8-15 (limited by assembly time) | 60-100+ (limited by review time) | 5-8x throughput increase |
-| Carrier comparison turnaround | 2-4 hours | Under 30 seconds | Enables real-time tendering decisions |
+| Data accuracy in exports | Error-prone (manual transcription) | Structured output (no transcription) | Eliminates human error |
+| Carrier comparison turnaround | Hours (manual spreadsheet work) | Seconds | On-demand comparisons |
 
-A compliance analyst spending 4 hours per day assembling vetting reports can redirect that time to actually reviewing the data and making qualification decisions. At $30/hour, that is $120/day in recovered productivity -- $2,600/month per analyst. The Pro subscription costs $49/month.
+The primary value is eliminating the assembly step. A compliance analyst spending hours per day formatting vetting reports can redirect that time to actually reviewing the data and making qualification decisions.
 
 ## Competitive Positioning
 
@@ -49,9 +48,9 @@ A compliance analyst spending 4 hours per day assembling vetting reports can red
 | CLI/terminal workflow | Yes (Claude Code native) | No | No | No | No |
 | Pipeline integration | Yes (auto-consumes Carrier Intel + Risk Engine) | No | Standalone | Standalone | Standalone |
 | Customizable report sections | Planned (v0.2) | Manual template editing | No | Limited | Yes |
-| Real-time data | Yes (live API) | No (point-in-time snapshots) | Nightly batch | Real-time | Daily batch |
+| Current data (nightly FMCSA sync) | Yes (on-demand API) | No (point-in-time snapshots) | Nightly batch | On-demand | Daily batch |
 
-**Key differentiator**: Ops Reporter is not a standalone reporting tool. It is the OUTPUT stage of a three-stage pipeline. When it generates a vetting report, that report contains live carrier data from Carrier Intel AND computed risk assessments from Risk Engine. No other carrier reporting tool in the market embeds real-time risk scores, insurance gap analysis, and compliance audit results into a single generated document.
+**Key differentiator**: Ops Reporter is not a standalone reporting tool. It is the OUTPUT stage of a three-stage pipeline. When it generates a vetting report, that report contains current carrier data from Carrier Intel AND computed risk assessments from Risk Engine. No other carrier reporting tool in the market embeds risk scores, insurance gap analysis, and compliance audit results into a single generated document.
 
 **Secondary differentiator**: Multi-format export. Ops Reporter outputs Markdown (human-readable), JSON (machine-readable), and CSV (spreadsheet/TMS-importable) from the same source data. A compliance manager gets a formatted report; her TMS gets a structured import file; her developer gets a JSON payload -- all from the same pipeline execution.
 

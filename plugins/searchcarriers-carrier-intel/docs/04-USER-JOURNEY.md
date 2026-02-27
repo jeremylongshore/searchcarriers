@@ -126,7 +126,7 @@ INSURANCE
   Surety Bond (Broker):             $75,000 (Active)
 ```
 
-Sarah can see in 5 seconds what would normally take her 20 minutes across three browser tabs. Active authorities, active insurance with adequate limits, Satisfactory safety rating. She is ready to tender this load.
+Sarah can see in a single response what would normally require navigating three separate browser tabs. Active authorities, active insurance with adequate limits, Satisfactory safety rating. She is ready to tender this load.
 
 ### Step 3: Entity Mapping (Pro Tier)
 
@@ -169,7 +169,7 @@ SUMMARY:
   *** RED FLAG: Shared physical address detected ***
 ```
 
-This is the entity mapping that justifies the Pro upgrade. Sarah's compliance team just found a probable chameleon carrier in 10 seconds that might have taken a day of manual investigation.
+This is the entity mapping that justifies the Pro upgrade. Sarah's compliance team just found a probable chameleon carrier through a single command that would otherwise require manually cross-referencing VINs across multiple FMCSA records.
 
 **Expected output (Free tier):**
 

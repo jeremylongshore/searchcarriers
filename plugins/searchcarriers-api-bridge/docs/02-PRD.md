@@ -189,13 +189,13 @@ Deferred to v0.2.0:
 
 | Metric | Target | How Measured |
 |--------|--------|-------------|
-| Bulk lookup throughput (100 DOTs, basic) | < 45 seconds | Timer across batch with rate limiting |
-| Bulk lookup throughput (100 DOTs, standard) | < 90 seconds | Timer across batch with rate limiting |
-| API health check latency | < 10 seconds | Timer across 5 endpoint probes |
-| Webhook CRUD latency | < 2 seconds per operation | Timer per API call |
-| TMS export accuracy | 100% field mapping correctness | Integration test against known carrier data |
-| Error isolation rate | 100% (one failed DOT never aborts the batch) | Unit tests with mixed success/failure inputs |
-| Tier gate accuracy | 100% | Integration tests |
+| Bulk lookup throughput (100 DOTs, basic) | Target: < 45 seconds | Timer across batch with rate limiting |
+| Bulk lookup throughput (100 DOTs, standard) | Target: < 90 seconds | Timer across batch with rate limiting |
+| API health check latency | Target: < 10 seconds | Timer across 5 endpoint probes |
+| Webhook CRUD latency | Target: < 2 seconds per operation | Timer per API call |
+| TMS export accuracy | Target: 100% field mapping correctness | Integration test against known carrier data |
+| Error isolation rate | Target: 100% (one failed DOT never aborts the batch) | Unit tests with mixed success/failure inputs |
+| Tier gate accuracy | Target: 100% | Integration tests |
 
 ## Dependencies
 

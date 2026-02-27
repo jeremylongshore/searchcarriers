@@ -229,7 +229,7 @@ Sarah sees the comparison table and makes her decision in 30 seconds:
 - KLLM specializes in reefer and has the second-best risk score. Best fit for this load.
 - Cold Star is in REVIEW status. She would need to address the OOS rate and insurance coverage before considering them.
 
-She tenders the load to KLLM and moves on to the next one. The comparison that would have taken 45 minutes in a spreadsheet took 10 seconds.
+She tenders the load to KLLM and moves on to the next one.
 
 ## Journey 3: Data Export for TMS Import
 

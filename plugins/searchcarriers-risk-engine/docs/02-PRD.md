@@ -214,13 +214,13 @@ Deferred to v0.2.0:
 
 | Metric | Target | How Measured |
 |--------|--------|-------------|
-| Risk score latency | < 3 seconds | Timer in MCP tool handler |
-| Vetting check latency | < 3 seconds | Timer in MCP tool handler |
-| Insurance check latency | < 2 seconds | Timer (no additional API calls, data-only analysis) |
-| False positive rate (HIGH risk for safe carriers) | < 5% | Comparison against known carrier outcomes |
-| False negative rate (LOW risk for bad carriers) | < 2% | Comparison against carriers with claims/crashes |
-| Tier gate accuracy | 100% | Integration tests |
-| Data completeness handling | 100% (no unhandled missing fields) | Edge case tests with sparse carrier data |
+| Risk score latency | Target: < 3 seconds | Timer in MCP tool handler |
+| Vetting check latency | Target: < 3 seconds | Timer in MCP tool handler |
+| Insurance check latency | Target: < 2 seconds | Timer (no additional API calls, data-only analysis) |
+| False positive rate (HIGH risk for safe carriers) | Target: < 5% | Comparison against known carrier outcomes |
+| False negative rate (LOW risk for bad carriers) | Target: < 2% | Comparison against carriers with claims/crashes |
+| Tier gate accuracy | Target: 100% | Integration tests |
+| Data completeness handling | Target: 100% (no unhandled missing fields) | Edge case tests with sparse carrier data |
 
 ## Dependencies
 

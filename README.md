@@ -8,6 +8,16 @@ Built for freight brokers, safety teams, and logistics ops who need answers, not
 
 ---
 
+## Start Here
+
+Open Claude Code in this repo and say:
+
+    Walk me through getting started with SearchCarriers
+
+Or paste the repo URL into any LLM and ask it to help you set up.
+
+---
+
 ## Quick Start
 
 Up and running in under 2 minutes:

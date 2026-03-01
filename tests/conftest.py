@@ -76,6 +76,11 @@ def equipment_sample():
     return json.loads((FIXTURES_DIR / "equipment_sample.json").read_text())
 
 
+@pytest.fixture
+def carrier_realapi():
+    return json.loads((FIXTURES_DIR / "carrier_realapi.json").read_text())
+
+
 def assert_error_payload(result: dict, expected_code: str) -> None:
     """Assert that a handler result is a structured error envelope."""
     assert "error" in result, f"Expected error payload, got: {result}"

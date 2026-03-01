@@ -389,7 +389,7 @@ class TestExportData:
         assert isinstance(parsed, dict)
 
     async def test_csv_has_headers(self, fake_api_key, carrier_jbhunt):
-        """CSV format contains section headers."""
+        """CSV format contains curated column headers."""
         with respx.mock(base_url=API_BASE) as router:
             router.get("/search").mock(
                 return_value=httpx.Response(200, json=carrier_jbhunt)
@@ -408,7 +408,8 @@ class TestExportData:
             )
 
         assert result["format"] == "csv"
-        assert "### BASICS" in result["data"]
+        assert "DOT Number" in result["data"]
+        assert "Legal Name" in result["data"]
 
     async def test_markdown_starts_with_heading(self, fake_api_key, carrier_jbhunt):
         """Markdown format starts with a heading."""

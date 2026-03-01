@@ -18,6 +18,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,6 +31,16 @@ if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
 from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Local modules — field normalization, CSV export, PDF rendering
+# ---------------------------------------------------------------------------
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+from field_map import normalize_authority, normalize_carrier, normalize_insurance  # noqa: E402
+from csv_export import generate_carrier_csv  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # MCP SDK
@@ -247,6 +258,9 @@ def _quick_risk(
 ) -> tuple[str, list[str]]:
     """Compute a lightweight risk level and list of risk notes.
 
+    Accepts both normalized (``operating_status``) and raw (``operatingStatus``)
+    field names for backward compatibility.
+
     Returns:
         A (risk_level, notes) pair where risk_level is one of
         ``low`` / ``medium`` / ``elevated`` / ``high``.
@@ -254,19 +268,28 @@ def _quick_risk(
     score = 0
     notes: list[str] = []
 
-    # Operating status
-    op_status = str(carrier.get("operatingStatus") or "").lower()
+    # Operating status — normalized key first, then raw
+    op_status = str(
+        carrier.get("operating_status") or carrier.get("operatingStatus") or ""
+    ).lower()
     if "authorized" in op_status and "not" not in op_status:
         notes.append("Operating status is authorized.")
     elif "not" in op_status or "inactive" in op_status or "revoked" in op_status:
         score += 30
-        notes.append(f"Operating status is NOT authorized ({carrier.get('operatingStatus')!r}).")
+        raw_val = carrier.get("operating_status") or carrier.get("operatingStatus")
+        notes.append(f"Operating status is NOT authorized ({raw_val!r}).")
     else:
         score += 15
-        notes.append(f"Operating status is unclear ({carrier.get('operatingStatus')!r}).")
+        raw_val = carrier.get("operating_status") or carrier.get("operatingStatus")
+        notes.append(f"Operating status is unclear ({raw_val!r}).")
 
     # Safety rating
-    rating = str(carrier.get("rating") or carrier.get("safetyRating") or "Not Rated").strip()
+    rating = str(
+        carrier.get("safety_rating")
+        or carrier.get("rating")
+        or carrier.get("safetyRating")
+        or "Not Rated"
+    ).strip()
     if "satisfactory" in rating.lower() and "un" not in rating.lower():
         notes.append("Safety rating: Satisfactory.")
     elif "unsatisfactory" in rating.lower():
@@ -280,7 +303,11 @@ def _quick_risk(
         notes.append(f"Safety rating: {rating} — unrated carriers carry unknown risk.")
 
     # MCS-150 freshness
-    raw_mcs = carrier.get("mcs150Date") or carrier.get("mcs150FormDate")
+    raw_mcs = (
+        carrier.get("mcs150_date")
+        or carrier.get("mcs150Date")
+        or carrier.get("mcs150FormDate")
+    )
     mcs_dt = _parse_date(str(raw_mcs) if raw_mcs else None)
     mcs_age = _years_since(mcs_dt)
     if mcs_age is None:
@@ -308,11 +335,14 @@ def _quick_risk(
         now = _now_utc()
         expiring: list[str] = []
         for ins in active_ins:
-            cancel_dt = _parse_date(ins.get("cancellationDate"))
+            cancel_dt = _parse_date(
+                ins.get("cancellation_date") or ins.get("cancellationDate")
+            )
             if cancel_dt:
                 days_remaining = (cancel_dt - now).days
                 if 0 < days_remaining <= 30:
-                    expiring.append(f"policy {ins.get('policyNumber', 'unknown')} in {days_remaining}d")
+                    pol = ins.get("policy_number") or ins.get("policyNumber") or "unknown"
+                    expiring.append(f"policy {pol} in {days_remaining}d")
         if expiring:
             score += 10
             notes.append(f"Near-term cancellation: {', '.join(expiring)}.")
@@ -409,13 +439,13 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
     """Generate a comprehensive carrier vetting report.
 
     Fetches carrier search data, authorities, and insurance records in
-    parallel, then renders a professional markdown (or plain text) report
-    suitable for a compliance file.
+    parallel, normalizes all fields, then renders a professional report.
+    Supports ``markdown``, ``text``, and ``pdf`` output formats.
     """
     dot: str = str(arguments["dot_number"]).strip()
     include_risk: bool = bool(arguments.get("include_risk", True))
     fmt: str = str(arguments.get("format", "markdown")).lower()
-    if fmt not in ("markdown", "text"):
+    if fmt not in ("markdown", "text", "pdf"):
         fmt = "markdown"
 
     search_url = f"{API_BASE}/search"
@@ -436,51 +466,45 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
     if isinstance(search_raw, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_raw}")
 
-    carrier = _extract_carrier(search_raw)
-    if not carrier:
+    raw_carrier = _extract_carrier(search_raw)
+    if not raw_carrier:
         return _error_payload("not_found", f"No carrier found for DOT {dot}.")
 
-    authorities: list[dict[str, Any]] = (
+    raw_auth_list: list[dict[str, Any]] = (
         _extract_list(authorities_raw) if not isinstance(authorities_raw, Exception) else []
     )
-    insurances: list[dict[str, Any]] = (
+    raw_ins_list: list[dict[str, Any]] = (
         _extract_list(insurances_raw) if not isinstance(insurances_raw, Exception) else []
     )
 
-    name = _carrier_name(carrier)
-    mc_number = _safe_str(carrier.get("mcNumber") or carrier.get("mc_number"))
-    dba = _safe_str(carrier.get("dbaName") or carrier.get("dba_name"))
-    address_parts = [
-        carrier.get("phyStreet") or carrier.get("street") or "",
-        carrier.get("phyCity") or carrier.get("city") or "",
-        carrier.get("phyState") or carrier.get("state") or "",
-        carrier.get("phyZip") or carrier.get("zip") or "",
-    ]
-    address = ", ".join(p for p in address_parts if p) or "N/A"
-    phone = _safe_str(carrier.get("telephone") or carrier.get("phone"))
-    email = _safe_str(carrier.get("email"))
-    op_status = _safe_str(carrier.get("operatingStatus") or carrier.get("operatingStatus"))
-    safety_rating = _safe_str(
-        carrier.get("rating") or carrier.get("safetyRating"), fallback="Not Rated"
-    )
-    power_units = _safe_int(carrier.get("totalPowerUnits") or carrier.get("powerUnits"))
-    drivers = _safe_int(carrier.get("totalDrivers") or carrier.get("drivers"))
-    crashes = _safe_int(carrier.get("crashTotal") or carrier.get("crashes"))
-    inspections = _safe_int(carrier.get("inspectionTotal") or carrier.get("inspections"))
-    oos_rate_vehicle = _safe_float(carrier.get("oosRate") or carrier.get("oosRateVehicle"))
-    oos_rate_driver = _safe_float(carrier.get("oosRateDriver"))
-    entity_type = _safe_str(carrier.get("entityType") or carrier.get("carrierType"))
+    # Normalize data through field_map
+    carrier = normalize_carrier(raw_carrier)
+    authorities = normalize_authority(raw_auth_list)
+    insurances = normalize_insurance(raw_ins_list)
 
-    # MCS-150 date
-    raw_mcs = carrier.get("mcs150Date") or carrier.get("mcs150FormDate")
-    mcs_date_str = _safe_str(raw_mcs)
+    name = carrier["legal_name"] or "Unknown Carrier"
+    mc_number = _safe_str(carrier["mc_number"])
+    dba = _safe_str(carrier["dba_name"])
+    address = _safe_str(carrier["address"])
+    phone = _safe_str(carrier["phone"])
+    email = _safe_str(carrier["email"])
+    op_status = _safe_str(carrier["operating_status"])
+    safety_rating = _safe_str(carrier["safety_rating"], fallback="Not Rated")
+    power_units = carrier["power_units"] or 0
+    drivers = carrier["total_drivers"] or 0
+    crashes = carrier["crash_total"] or 0
+    inspections = carrier["inspection_total"] or 0
+    oos_rate_vehicle = _safe_float(carrier["oos_rate_vehicle"])
+    oos_rate_driver = _safe_float(carrier["oos_rate_driver"])
+    entity_type = _safe_str(carrier["entity_type"])
+    mcs_date_str = _safe_str(carrier["mcs150_date"])
 
     # Active authority types
     active_auth_types: list[str] = []
     inactive_auth_types: list[str] = []
     for auth in authorities:
         status = str(auth.get("status") or "").lower()
-        atype = str(auth.get("type") or auth.get("authorityType") or "Unknown")
+        atype = str(auth.get("type") or "Unknown")
         if "active" in status or "authorized" in status:
             active_auth_types.append(atype)
         else:
@@ -499,7 +523,48 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
         risk_level, risk_notes = _quick_risk(carrier, authorities, insurances)
 
     # ---------------------------------------------------------------------------
-    # Build report sections
+    # PDF output path
+    # ---------------------------------------------------------------------------
+    if fmt == "pdf":
+        try:
+            from pdf_renderer import render_pdf, report_output_path
+
+            # Determine verdict badge
+            if risk_level == "low":
+                verdict = "APPROVED"
+            elif risk_level == "high":
+                verdict = "DECLINED"
+            else:
+                verdict = "CONDITIONAL"
+
+            recommendation = _recommendation_badge(risk_level)
+
+            pdf_path = report_output_path("vetting", dot)
+            rendered = render_pdf("vetting_report.html", {
+                "carrier": carrier,
+                "authorities": authorities,
+                "insurances": insurances,
+                "risk_level": risk_level,
+                "risk_notes": risk_notes,
+                "verdict": verdict,
+                "recommendation": recommendation,
+                "report_date": _report_date(),
+            }, pdf_path)
+
+            return {
+                "report": f"PDF report written to {rendered}",
+                "format": "pdf",
+                "file_path": rendered,
+                "carrier_name": name,
+                "_pipeline": _pipeline_meta("generate_report", dot),
+            }
+        except RuntimeError as exc:
+            # Graceful degradation — fall back to markdown
+            fmt = "markdown"
+            # Continue to markdown rendering below
+
+    # ---------------------------------------------------------------------------
+    # Build report sections (markdown / text)
     # ---------------------------------------------------------------------------
     lines: list[str] = []
 
@@ -541,13 +606,12 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
     if authorities:
         auth_rows = []
         for auth in authorities:
-            atype = _safe_str(auth.get("type") or auth.get("authorityType"))
+            atype = _safe_str(auth.get("type"))
             astatus = _safe_str(auth.get("status"))
-            granted = _safe_str(auth.get("grantedDate") or auth.get("effectiveDate"))
-            revoked = _safe_str(auth.get("revokedDate") or auth.get("revocationDate"))
-            auth_rows.append([atype, astatus, granted, revoked])
+            docket = _safe_str(auth.get("docket_number") or auth.get("granted_date"))
+            auth_rows.append([atype, astatus, docket])
         lines.append(
-            _md_table(["Authority Type", "Status", "Granted", "Revoked"], auth_rows)
+            _md_table(["Authority Type", "Status", "Docket / Granted"], auth_rows)
         )
     else:
         lines.append("_No authority records returned for this carrier._")
@@ -587,14 +651,14 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
     if insurances:
         ins_rows = []
         for ins in insurances:
-            ins_type = _safe_str(ins.get("type") or ins.get("insuranceType"))
+            ins_type = _safe_str(ins.get("type"))
             ins_status = _safe_str(ins.get("status"))
-            coverage = _format_currency(ins.get("coverage") or ins.get("coverageAmount"))
-            policy_num = _safe_str(ins.get("policyNumber") or ins.get("policy_number"))
-            carrier_name_ins = _safe_str(ins.get("insuranceCarrier") or ins.get("insurer"))
-            effective = _safe_str(ins.get("effectiveDate") or ins.get("inceptionDate"))
-            cancellation = _safe_str(ins.get("cancellationDate") or ins.get("expirationDate"))
-            ins_rows.append([ins_type, ins_status, coverage, policy_num, carrier_name_ins, effective, cancellation])
+            coverage = _format_currency(ins.get("coverage"))
+            policy_num = _safe_str(ins.get("policy_number"))
+            insurer = _safe_str(ins.get("insurer"))
+            effective = _safe_str(ins.get("effective_date"))
+            cancellation = _safe_str(ins.get("cancellation_date"))
+            ins_rows.append([ins_type, ins_status, coverage, policy_num, insurer, effective, cancellation])
         lines.append(
             _md_table(
                 ["Type", "Status", "Coverage", "Policy No.", "Insurer", "Effective", "Cancels"],
@@ -680,11 +744,11 @@ async def _generate_report(arguments: dict[str, Any], api_key: str) -> dict[str,
 async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     """Generate a fleet analysis report for a carrier.
 
-    Fetches carrier basics and equipment data in parallel, then renders a
-    structured fleet analysis with size metrics, equipment roster, and ratio
-    commentary.
+    Fetches carrier basics and equipment data in parallel, normalizes fields,
+    then renders a structured fleet analysis.  Supports ``pdf`` format.
     """
     dot: str = str(arguments["dot_number"]).strip()
+    fmt: str = str(arguments.get("format", "markdown")).lower()
 
     search_url = f"{API_BASE}/search"
 
@@ -701,20 +765,23 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
     if isinstance(search_raw, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_raw}")
 
-    carrier = _extract_carrier(search_raw)
-    if not carrier:
+    raw_carrier = _extract_carrier(search_raw)
+    if not raw_carrier:
         return _error_payload("not_found", f"No carrier found for DOT {dot}.")
 
     equipment_list: list[dict[str, Any]] = (
         _extract_list(equipment_raw) if not isinstance(equipment_raw, Exception) else []
     )
 
-    name = _carrier_name(carrier)
-    power_units = _safe_int(carrier.get("totalPowerUnits") or carrier.get("powerUnits"))
-    drivers = _safe_int(carrier.get("totalDrivers") or carrier.get("drivers"))
+    # Normalize carrier data
+    carrier = normalize_carrier(raw_carrier)
+    name = carrier["legal_name"] or "Unknown Carrier"
+    power_units = carrier["power_units"] or 0
+    drivers = carrier["total_drivers"] or 0
 
     # Equipment type breakdown
     type_counts: dict[str, int] = {}
+    roster: list[dict[str, str]] = []
     for item in equipment_list:
         eq_type = str(
             item.get("equipmentType")
@@ -723,6 +790,32 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
             or "Unknown"
         )
         type_counts[eq_type] = type_counts.get(eq_type, 0) + 1
+
+        # Extract VIN detail if available
+        vin_detail = item.get("vin_detail") or {}
+        year = _safe_str(
+            vin_detail.get("model_year")
+            or item.get("year")
+            or item.get("modelYear")
+        )
+        make = _safe_str(
+            vin_detail.get("make")
+            or item.get("make")
+            or item.get("manufacturer")
+        )
+        model = _safe_str(
+            vin_detail.get("model")
+            or item.get("model")
+        )
+        vin = _safe_str(item.get("vin") or item.get("VIN"))
+
+        roster.append({
+            "year": year if year != "N/A" else "",
+            "make": make if make != "N/A" else "",
+            "model": model if model != "N/A" else "",
+            "type": eq_type,
+            "vin": vin if vin != "N/A" else "",
+        })
 
     # Fleet-to-driver ratio
     if power_units > 0 and drivers > 0:
@@ -747,7 +840,41 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
         ratio_note = "Fleet size data unavailable from carrier record."
 
     # ---------------------------------------------------------------------------
-    # Build report
+    # PDF output
+    # ---------------------------------------------------------------------------
+    if fmt == "pdf":
+        try:
+            from pdf_renderer import render_pdf, report_output_path
+
+            sorted_types = sorted(type_counts.items(), key=lambda x: -x[1])
+            pdf_path = report_output_path("fleet", dot)
+            rendered = render_pdf("fleet_report.html", {
+                "carrier": carrier,
+                "equipment_count": len(equipment_list),
+                "type_count": len(type_counts),
+                "type_counts": sorted_types,
+                "ratio_note": ratio_note,
+                "roster": roster[:25],
+                "report_date": _report_date(),
+            }, pdf_path)
+
+            return {
+                "report": f"PDF fleet report written to {rendered}",
+                "format": "pdf",
+                "file_path": rendered,
+                "fleet_size": {
+                    "power_units": power_units,
+                    "drivers": drivers,
+                    "equipment_records": len(equipment_list),
+                    "equipment_types": type_counts,
+                },
+                "_pipeline": _pipeline_meta("generate_fleet", dot),
+            }
+        except RuntimeError:
+            fmt = "markdown"
+
+    # ---------------------------------------------------------------------------
+    # Build report (markdown)
     # ---------------------------------------------------------------------------
     lines: list[str] = []
     lines.append(f"# Fleet Analysis Report")
@@ -783,25 +910,23 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
     else:
         lines.append("_No equipment records returned for this carrier._")
 
-    if equipment_list:
+    if roster:
         lines.append(_divider())
         lines.append("## Equipment Roster (Sample)")
         lines.append("")
-        # Show up to 25 rows to keep reports manageable
-        sample = equipment_list[:25]
-        roster_rows = []
-        for item in sample:
-            year = _safe_str(item.get("year") or item.get("modelYear"))
-            make = _safe_str(item.get("make") or item.get("manufacturer"))
-            model = _safe_str(item.get("model"))
-            eq_type = _safe_str(
-                item.get("equipmentType") or item.get("equipment_type") or item.get("type")
-            )
-            vin = _safe_str(item.get("vin") or item.get("VIN"))
-            state = _safe_str(item.get("licensePlateState") or item.get("state"))
-            roster_rows.append([year, make, model, eq_type, vin, state])
+        sample = roster[:25]
+        roster_rows = [
+            [
+                r.get("year", "N/A"),
+                r.get("make", "N/A"),
+                r.get("model", "N/A"),
+                r.get("type", "N/A"),
+                r.get("vin", "N/A"),
+            ]
+            for r in sample
+        ]
         lines.append(
-            _md_table(["Year", "Make", "Model", "Type", "VIN", "State"], roster_rows)
+            _md_table(["Year", "Make", "Model", "Type", "VIN"], roster_rows)
         )
         if len(equipment_list) > 25:
             lines.append(f"\n_Showing 25 of {len(equipment_list)} equipment records._")
@@ -830,12 +955,12 @@ async def _generate_fleet(arguments: dict[str, Any], api_key: str) -> dict[str, 
 async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     """Generate a side-by-side carrier comparison table.
 
-    Fetches search data for all requested carriers in parallel and renders a
-    structured markdown comparison covering basics, fleet, safety, insurance,
-    authority, and an overall risk indicator.
+    Fetches search data for all requested carriers in parallel, normalizes
+    all fields, and renders a comparison.  Supports ``pdf`` format.
     """
     raw_dots: list[Any] = arguments.get("dot_numbers") or []
     dot_numbers = [str(d).strip() for d in raw_dots if str(d).strip()]
+    fmt: str = str(arguments.get("format", "markdown")).lower()
 
     if len(dot_numbers) < 2:
         return _error_payload(
@@ -869,27 +994,33 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
         carrier_data.append((all_results[base], all_results[base + 1], all_results[base + 2]))
 
     # ---------------------------------------------------------------------------
-    # Build comparison
+    # Normalize all carrier data
     # ---------------------------------------------------------------------------
-    carrier_records: list[dict[str, Any]] = []
-    authority_lists: list[list[dict[str, Any]]] = []
-    insurance_lists: list[list[dict[str, Any]]] = []
+    normalized_carriers: list[dict[str, Any]] = []
+    normalized_auths: list[list[dict[str, Any]]] = []
+    normalized_inss: list[list[dict[str, Any]]] = []
     carrier_names: list[str] = []
 
     for dot, (search_raw, auth_raw, ins_raw) in zip(dot_numbers, carrier_data):
         if isinstance(search_raw, Exception):
-            carrier_records.append({"_error": str(search_raw), "_dot": dot})
+            normalized_carriers.append({"_error": str(search_raw), "dot_number": dot})
         else:
-            c = _extract_carrier(search_raw)
-            c.setdefault("_dot", dot)
-            carrier_records.append(c)
+            raw_c = _extract_carrier(search_raw)
+            if raw_c:
+                nc = normalize_carrier(raw_c)
+                nc["dot_number"] = nc["dot_number"] or dot
+                normalized_carriers.append(nc)
+            else:
+                normalized_carriers.append({"_error": "empty", "dot_number": dot})
 
-        authority_lists.append(_extract_list(auth_raw) if not isinstance(auth_raw, Exception) else [])
-        insurance_lists.append(_extract_list(ins_raw) if not isinstance(ins_raw, Exception) else [])
+        raw_auth = _extract_list(auth_raw) if not isinstance(auth_raw, Exception) else []
+        raw_ins = _extract_list(ins_raw) if not isinstance(ins_raw, Exception) else []
+        normalized_auths.append(normalize_authority(raw_auth))
+        normalized_inss.append(normalize_insurance(raw_ins))
 
     carrier_names = [
-        "ERROR" if "_error" in c else _carrier_name(c)
-        for c in carrier_records
+        "ERROR" if "_error" in c else (c.get("legal_name") or "Unknown Carrier")
+        for c in normalized_carriers
     ]
 
     def _row_for_field(
@@ -897,7 +1028,7 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
         extractor: Any,  # callable(carrier, authorities, insurances) -> str
     ) -> list[str]:
         cells = [label]
-        for c, auths, inss in zip(carrier_records, authority_lists, insurance_lists):
+        for c, auths, inss in zip(normalized_carriers, normalized_auths, normalized_inss):
             if "_error" in c:
                 cells.append("(fetch error)")
             else:
@@ -909,7 +1040,7 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Risk indicator per carrier
     risk_levels: list[str] = []
-    for c, auths, inss in zip(carrier_records, authority_lists, insurance_lists):
+    for c, auths, inss in zip(normalized_carriers, normalized_auths, normalized_inss):
         if "_error" in c:
             risk_levels.append("N/A")
         else:
@@ -921,50 +1052,50 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
 
     rows.append(_row_for_field(
         "DOT Number",
-        lambda c, a, i: c.get("_dot") or c.get("dotNumber") or "N/A",
+        lambda c, a, i: c.get("dot_number") or "N/A",
     ))
     rows.append(_row_for_field(
         "Legal Name",
-        lambda c, a, i: _carrier_name(c),
+        lambda c, a, i: c.get("legal_name") or "Unknown Carrier",
     ))
     rows.append(_row_for_field(
         "Operating Status",
-        lambda c, a, i: _safe_str(c.get("operatingStatus")),
+        lambda c, a, i: _safe_str(c.get("operating_status")),
     ))
     rows.append(_row_for_field(
         "Entity Type",
-        lambda c, a, i: _safe_str(c.get("entityType") or c.get("carrierType")),
+        lambda c, a, i: _safe_str(c.get("entity_type")),
     ))
     rows.append(_row_for_field(
         "State",
-        lambda c, a, i: _safe_str(c.get("phyState") or c.get("state")),
+        lambda c, a, i: _safe_str(c.get("state")),
     ))
     rows.append(_row_for_field(
         "Power Units",
-        lambda c, a, i: str(_safe_int(c.get("totalPowerUnits") or c.get("powerUnits"))) or "N/A",
+        lambda c, a, i: str(c.get("power_units") or 0) or "N/A",
     ))
     rows.append(_row_for_field(
         "Drivers",
-        lambda c, a, i: str(_safe_int(c.get("totalDrivers") or c.get("drivers"))) or "N/A",
+        lambda c, a, i: str(c.get("total_drivers") or 0) or "N/A",
     ))
     rows.append(_row_for_field(
         "Safety Rating",
-        lambda c, a, i: _safe_str(c.get("rating") or c.get("safetyRating"), fallback="Not Rated"),
+        lambda c, a, i: _safe_str(c.get("safety_rating"), fallback="Not Rated"),
     ))
     rows.append(_row_for_field(
         "Vehicle OOS Rate",
         lambda c, a, i: (
-            f"{_safe_float(c.get('oosRate') or c.get('oosRateVehicle')):.1f}%"
-            if c.get("oosRate") or c.get("oosRateVehicle") else "N/A"
+            f"{_safe_float(c.get('oos_rate_vehicle')):.1f}%"
+            if c.get("oos_rate_vehicle") else "N/A"
         ),
     ))
     rows.append(_row_for_field(
         "Crashes",
-        lambda c, a, i: str(_safe_int(c.get("crashTotal") or c.get("crashes"))),
+        lambda c, a, i: str(c.get("crash_total") or 0),
     ))
     rows.append(_row_for_field(
         "Inspections",
-        lambda c, a, i: str(_safe_int(c.get("inspectionTotal") or c.get("inspections"))),
+        lambda c, a, i: str(c.get("inspection_total") or 0),
     ))
     rows.append(_row_for_field(
         "Active Insurance",
@@ -993,14 +1124,51 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
     risk_row = ["Risk Indicator"] + risk_levels
     rows.append(risk_row)
 
-    # Table headers: "Field" + one column per carrier (DOT as label)
-    headers = ["Field"] + [f"{name}\n(DOT {dot})" for name, dot in zip(carrier_names, dot_numbers)]
-
-    # For the comparison we use a simplified single-line header (newlines break tables)
+    # For the comparison we use a simplified single-line header
     headers_simple = ["Field"] + [
         f"{name} ({dot})" for name, dot in zip(carrier_names, dot_numbers)
     ]
 
+    # ---------------------------------------------------------------------------
+    # PDF output
+    # ---------------------------------------------------------------------------
+    if fmt == "pdf":
+        try:
+            from pdf_renderer import render_pdf, report_output_path
+
+            comparison_rows = [
+                {"label": row[0], "values": row[1:]}
+                for row in rows
+            ]
+            risk_pairs = list(zip(normalized_carriers, risk_levels))
+            pdf_path = report_output_path("compare", "_".join(dot_numbers))
+            rendered = render_pdf("compare_report.html", {
+                "carriers": [c for c in normalized_carriers if "_error" not in c],
+                "comparison_rows": comparison_rows,
+                "risk_pairs": risk_pairs,
+                "report_date": _report_date(),
+            }, pdf_path)
+
+            return {
+                "report": f"PDF comparison report written to {rendered}",
+                "format": "pdf",
+                "file_path": rendered,
+                "carrier_count": len(dot_numbers),
+                "carriers": carrier_names,
+                "_pipeline": {
+                    "source": "ops-reporter",
+                    "tool": "generate_compare",
+                    "version": VERSION,
+                    "dot_numbers": dot_numbers,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            }
+        except RuntimeError:
+            pass  # Fall through to markdown
+
+    # ---------------------------------------------------------------------------
+    # Markdown output
+    # ---------------------------------------------------------------------------
     lines: list[str] = []
     lines.append("# Carrier Comparison Report")
     lines.append("")
@@ -1049,8 +1217,9 @@ async def _generate_compare(arguments: dict[str, Any], api_key: str) -> dict[str
 async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     """Export structured carrier data in JSON, CSV, or Markdown format.
 
-    Fetches the requested data sections in parallel and serialises them
-    according to the caller's preferred format.
+    Fetches the requested data sections in parallel, normalizes the data,
+    and serialises it according to the caller's preferred format.
+    CSV now produces a clean, curated spreadsheet instead of a 143-column dump.
     """
     dot: str = str(arguments["dot_number"]).strip()
     fmt: str = str(arguments.get("format", "json")).lower()
@@ -1064,7 +1233,6 @@ async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any
         requested_sections = all_sections
 
     # Map section names to (url, params) tuples.
-    # Search uses a query param; company-scoped endpoints use path params.
     section_urls: dict[str, tuple[str, dict[str, Any] | None]] = {
         "basics":      (f"{API_BASE}/search",                      {"dotNumber": dot}),
         "authorities": (f"{API_BASE}/company/{dot}/authorities",   None),
@@ -1091,45 +1259,47 @@ async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any
         else:
             section_data[section] = _extract_list(result)
 
+    # Normalize data for curated output
+    norm_carrier = None
+    norm_auths = None
+    norm_inss = None
+
+    raw_basics = section_data.get("basics")
+    if isinstance(raw_basics, dict) and "error" not in raw_basics:
+        norm_carrier = normalize_carrier(raw_basics)
+
+    raw_auth = section_data.get("authorities")
+    if isinstance(raw_auth, list):
+        norm_auths = normalize_authority(raw_auth)
+
+    raw_ins = section_data.get("insurances")
+    if isinstance(raw_ins, list):
+        norm_inss = normalize_insurance(raw_ins)
+
     # ---------------------------------------------------------------------------
     # Format output
     # ---------------------------------------------------------------------------
     output: str
+    file_path: str | None = None
 
     if fmt == "json":
         output = json.dumps(section_data, indent=2, default=str)
 
     elif fmt == "csv":
-        buf = io.StringIO()
+        # Use curated CSV export instead of raw dump
+        if norm_carrier:
+            output = generate_carrier_csv(norm_carrier, norm_auths, norm_inss)
+        else:
+            # Fallback for error cases
+            buf = io.StringIO()
+            buf.write("ERROR,Could not normalize carrier data\n")
+            output = buf.getvalue()
 
-        def _write_csv_section(title: str, records: Any) -> None:
-            buf.write(f"### {title}\n")
-            if isinstance(records, dict) and "error" in records:
-                buf.write(f"ERROR,{records['error']}\n\n")
-                return
-            if isinstance(records, dict):
-                records = [records]
-            if not records:
-                buf.write("(no records)\n\n")
-                return
-            # Collect all keys across all records for consistent headers
-            all_keys: list[str] = []
-            seen: set[str] = set()
-            for rec in records:
-                for k in rec.keys():
-                    if k not in seen:
-                        all_keys.append(k)
-                        seen.add(k)
-            buf.write(",".join(f'"{k}"' for k in all_keys) + "\n")
-            for rec in records:
-                row_vals = [str(rec.get(k, "")).replace('"', '""') for k in all_keys]
-                buf.write(",".join(f'"{v}"' for v in row_vals) + "\n")
-            buf.write("\n")
-
-        for section in requested_sections:
-            _write_csv_section(section.upper(), section_data.get(section, []))
-
-        output = buf.getvalue()
+        # Write CSV to disk
+        from pdf_renderer import report_output_path
+        csv_path = report_output_path("export", dot, "csv")
+        csv_path.write_text(output, encoding="utf-8")
+        file_path = str(csv_path.resolve())
 
     else:  # markdown
         md_lines: list[str] = []
@@ -1150,7 +1320,6 @@ async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any
                 if not data:
                     md_lines.append("_No records returned._\n")
                 else:
-                    # Collect all keys from first record for headers
                     all_keys = list(data[0].keys()) if data else []
                     rows = [
                         [str(rec.get(k, "")) for k in all_keys]
@@ -1162,12 +1331,16 @@ async def _export_data(arguments: dict[str, Any], api_key: str) -> dict[str, Any
 
         output = "\n".join(md_lines)
 
-    return {
+    result: dict[str, Any] = {
         "data": output,
         "format": fmt,
         "sections": requested_sections,
         "_pipeline": _pipeline_meta("export_data", dot),
     }
+    if file_path:
+        result["file_path"] = file_path
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1202,11 +1375,11 @@ _TOOL_DEFINITIONS: list[Tool] = [
                 },
                 "format": {
                     "type": "string",
-                    "enum": ["markdown", "text"],
+                    "enum": ["markdown", "text", "pdf"],
                     "description": (
                         "Output format. 'markdown' (default) returns formatted markdown "
                         "with headers and tables. 'text' strips markdown syntax for plain "
-                        "text environments."
+                        "text environments. 'pdf' writes a professional PDF to disk."
                     ),
                     "default": "markdown",
                 },
@@ -1276,7 +1449,8 @@ _TOOL_DEFINITIONS: list[Tool] = [
                     "enum": ["json", "csv", "markdown"],
                     "description": (
                         "Output format: 'json' (default) for structured data, "
-                        "'csv' for spreadsheet import, 'markdown' for document embedding."
+                        "'csv' for clean spreadsheet export (curated columns), "
+                        "'markdown' for document embedding."
                     ),
                     "default": "json",
                 },

@@ -1,10 +1,15 @@
 """Shared test fixtures for SearchCarriers plugin + skill validation."""
 
+import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 ROOT = Path(__file__).parent.parent
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -122,3 +127,36 @@ def parse_frontmatter(skill_path: Path) -> dict:
         return yaml.safe_load(parts[1]) or {}
     except Exception:
         return {}
+
+
+# ---------------------------------------------------------------------------
+# Smoke / live-API fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def smoke_reports_dir():
+    """Create and return the reports/smoke/ directory."""
+    d = ROOT / "reports" / "smoke"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_artifact(directory: Path, name: str, data) -> Path:
+    """Save a JSON artifact to the smoke reports directory."""
+    path = directory / f"{name}.json"
+    path.write_text(json.dumps(data, indent=2, default=str))
+    return path
+
+
+def assert_no_error(result: dict) -> None:
+    """Assert that a handler result does not contain an error envelope."""
+    assert "error" not in result, f"Unexpected error: {result.get('error')}"
+
+
+@pytest.fixture(autouse=True)
+async def _rate_limit(request):
+    """Pause between integration tests to respect API rate limits."""
+    yield
+    if request.node.get_closest_marker("integration"):
+        await asyncio.sleep(0.4)

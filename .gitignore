@@ -42,6 +42,9 @@ coverage.xml
 *.log
 *.pid
 
+# Reports
+reports/
+
 # Temp
 tmp/
 *.tmp

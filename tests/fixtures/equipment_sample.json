@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "vin": "1HGCM82633A004352",
+      "VIN": "1HGCM82633A004352",
+      "vehicleIdentificationNumber": "1HGCM82633A004352",
+      "equipmentType": "Truck Tractor",
+      "type": "Truck Tractor",
+      "make": "Freightliner",
+      "manufacturer": "Freightliner",
+      "model": "Cascadia",
+      "year": "2023",
+      "modelYear": "2023",
+      "licensePlateState": "AR",
+      "state": "AR",
+      "gvwr": "80000"
+    },
+    {
+      "vin": "3AKJHHDR5NSMP4821",
+      "VIN": "3AKJHHDR5NSMP4821",
+      "vehicleIdentificationNumber": "3AKJHHDR5NSMP4821",
+      "equipmentType": "Truck Tractor",
+      "type": "Truck Tractor",
+      "make": "Peterbilt",
+      "manufacturer": "Peterbilt",
+      "model": "579",
+      "year": "2022",
+      "modelYear": "2022",
+      "licensePlateState": "AR",
+      "state": "AR",
+      "gvwr": "80000"
+    },
+    {
+      "vin": "1JJV532D8KL456789",
+      "VIN": "1JJV532D8KL456789",
+      "vehicleIdentificationNumber": "1JJV532D8KL456789",
+      "equipmentType": "Trailer",
+      "type": "Trailer",
+      "make": "Utility",
+      "manufacturer": "Utility",
+      "model": "3000R",
+      "year": "2021",
+      "modelYear": "2021",
+      "licensePlateState": "AR",
+      "state": "AR",
+      "gvwr": "68000"
+    }
+  ]
+}

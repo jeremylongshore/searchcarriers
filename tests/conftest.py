@@ -1,16 +1,81 @@
 """Shared test fixtures for SearchCarriers plugin + skill validation."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).parent.parent
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
 def repo_root():
     return ROOT
+
+
+# ---------------------------------------------------------------------------
+# Integration test fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_api_key():
+    """Dummy API key for respx-intercepted tests (never hits real API)."""
+    return "test-key-not-real"
+
+
+@pytest.fixture
+def live_api_key():
+    """Real API key from environment; skips the test if absent."""
+    key = os.environ.get("SEARCHCARRIERS_API_KEY", "").strip()
+    if not key:
+        pytest.skip("SEARCHCARRIERS_API_KEY not set — skipping live test")
+    return key
+
+
+@pytest.fixture
+def fixtures_dir():
+    """Path to the tests/fixtures/ directory."""
+    return FIXTURES_DIR
+
+
+@pytest.fixture
+def carrier_jbhunt():
+    return json.loads((FIXTURES_DIR / "carrier_jbhunt.json").read_text())
+
+
+@pytest.fixture
+def carrier_werner():
+    return json.loads((FIXTURES_DIR / "carrier_werner.json").read_text())
+
+
+@pytest.fixture
+def authorities_sample():
+    return json.loads((FIXTURES_DIR / "authorities_sample.json").read_text())
+
+
+@pytest.fixture
+def insurances_active():
+    return json.loads((FIXTURES_DIR / "insurances_active.json").read_text())
+
+
+@pytest.fixture
+def insurances_empty():
+    return json.loads((FIXTURES_DIR / "insurances_empty.json").read_text())
+
+
+@pytest.fixture
+def equipment_sample():
+    return json.loads((FIXTURES_DIR / "equipment_sample.json").read_text())
+
+
+def assert_error_payload(result: dict, expected_code: str) -> None:
+    """Assert that a handler result is a structured error envelope."""
+    assert "error" in result, f"Expected error payload, got: {result}"
+    assert result["error"]["code"] == expected_code
+    assert "message" in result["error"]
 
 
 @pytest.fixture

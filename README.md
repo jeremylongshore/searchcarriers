@@ -8,6 +8,8 @@ Built for freight brokers, safety teams, and logistics ops who need answers, not
 
 ---
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 ## Start Here
 
 Open Claude Code in this repo and say:

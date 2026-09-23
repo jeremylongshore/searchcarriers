@@ -33,7 +33,10 @@ from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
-from plugins.shared.api_contract import API_V3_BASE, normalize_v3_company  # noqa: E402
+from plugins.shared.api_contract import (  # noqa: E402  # gitleaks:allow -- symbol names
+    API_V3_BASE,
+    normalize_v3_company,
+)
 from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
 
 # ---------------------------------------------------------------------------

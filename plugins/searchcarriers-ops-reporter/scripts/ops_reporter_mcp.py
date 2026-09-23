@@ -29,7 +29,10 @@ _PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from plugins.shared.api_contract import API_V3_BASE, normalize_v3_company  # noqa: E402
+from plugins.shared.api_contract import (  # noqa: E402  # gitleaks:allow -- symbol names
+    API_V3_BASE,
+    normalize_v3_company,
+)
 from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
 
 # ---------------------------------------------------------------------------

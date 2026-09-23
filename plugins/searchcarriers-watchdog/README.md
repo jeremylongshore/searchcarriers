@@ -36,7 +36,7 @@ python3 plugins/searchcarriers-watchdog/scripts/watchdog_mcp.py
 | Tool | Description | Min Tier |
 |------|-------------|----------|
 | `manage_watchlist` | Add, remove, or list carriers on the watch list | Pro+ |
-| `get_alerts` | Pull recent alerts for safety, insurance, authority changes | Pro+ |
+| `get_alerts` | Return a truthful compatibility response when no alert-feed route is published | Pro+ |
 | `route_alert` | Format alerts for Slack, Telegram, email, or webhook delivery | Pro+ |
 | `monitor_compliance` | Detect compliance drift over time for watched carriers | Pro+ |
 
@@ -45,7 +45,7 @@ python3 plugins/searchcarriers-watchdog/scripts/watchdog_mcp.py
 | Command | Description |
 |---------|-------------|
 | `/sc-watch <add\|remove\|list> [DOT]` | Manage carrier watch list |
-| `/sc-alerts [--carrier DOT] [--since DATE]` | View and route alerts |
+| `/sc-alerts [event JSON] [--route CHANNEL]` | Explain alert availability or format a supplied event |
 
 ## Alert Routing Channels
 

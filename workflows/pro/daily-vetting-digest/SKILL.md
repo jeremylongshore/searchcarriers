@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-daily-vetting-digest
-description: >-
-  Auto-vet all watched carriers and generate a daily email digest with
-  pass/review/fail summaries. Use when scheduling vetting reports.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Auto-vet all watched carriers and generate a daily email digest with pass/review/fail summaries. Use when scheduling vetting reports.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- workflow
 ---
 
 # Daily Vetting Digest -- Workflow Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This workflow orchestrates the Ops Reporter and Watchdog plugins into an automated daily vetting cycle. It retrieves every carrier on the active watch list, runs risk scoring and vetting checks against each one, and assembles the results into a single email-ready digest with clear pass/review/fail breakdowns.
 
@@ -33,14 +38,13 @@ Pipeline flow: Watchdog (`manage_watchlist`) provides the carrier roster. Risk E
 
 ### Step 1: Retrieve the Active Watch List
 
-Call `manage_watchlist` with `action: "list"`. Filter to ACTIVE monitoring state only -- skip PAUSED, STALE, and BASELINE entries.
+Call `manage_watchlist` with `action: "list"`. Process the returned carrier
+entries as-is; the documented tool does not promise synthetic monitoring-state
+or baseline fields.
 
 ```python
 watchlist_response = manage_watchlist(action="list")
-active_carriers = [
-    c for c in watchlist_response.get("carriers", [])
-    if c.get("monitoring_state") == "ACTIVE"
-]
+active_carriers = watchlist_response.get("carriers", [])
 if not active_carriers:
     print("No active carriers on watch list. Digest skipped.")
 ```
@@ -59,11 +63,16 @@ scored = []
 for carrier in active_carriers:
     result = risk_score(dot_number=carrier["dot_number"])
     data = result.get("_pipeline", {}).get("data", {})
-    scored.append({**carrier, "composite_score": data.get("composite_score"),
-                   "risk_level": data.get("risk_level", "UNKNOWN")})
+    scored.append(
+        {
+            **carrier,
+            "composite_score": data.get("composite_score"),
+            "risk_level": data.get("risk_level", "UNKNOWN"),
+        }
+    )
 
 needs_vetting = [c for c in scored if c["risk_level"] in ("ELEVATED", "HIGH")]
-auto_passed   = [c for c in scored if c["risk_level"] in ("LOW", "MEDIUM")]
+auto_passed = [c for c in scored if c["risk_level"] in ("LOW", "MEDIUM")]
 ```
 
 ### Step 3: Vet Elevated and High-Risk Carriers
@@ -75,8 +84,8 @@ for carrier in needs_vetting:
     result = vetting_check(dot_number=carrier["dot_number"], ruleset="standard")
     data = result.get("_pipeline", {}).get("data", {})
     carrier["vetting_verdict"] = data.get("verdict", "UNKNOWN")
-    carrier["review_items"]    = data.get("review_items", [])
-    carrier["fail_items"]      = data.get("fail_items", [])
+    carrier["review_items"] = data.get("review_items", [])
+    carrier["fail_items"] = data.get("fail_items", [])
 ```
 
 ### Step 4: Generate Detailed Reports for Failures
@@ -87,12 +96,18 @@ Any FAIL carrier gets a full vetting report via `generate_report`. REVIEW carrie
 detailed_reports = []
 for c in needs_vetting:
     if c["vetting_verdict"] == "FAIL" or (
-        c["vetting_verdict"] == "REVIEW" and len(c.get("review_items", [])) >= 3):
-        report = generate_report(dot_number=c["dot_number"],
-                                 report_type="vetting_report", format="markdown")
-        detailed_reports.append({"dot_number": c["dot_number"],
-            "legal_name": c["legal_name"],
-            "report": report.get("result", {}).get("content", "")})
+        c["vetting_verdict"] == "REVIEW" and len(c.get("review_items", [])) >= 3
+    ):
+        report = generate_report(
+            dot_number=c["dot_number"], report_type="vetting_report", format="markdown"
+        )
+        detailed_reports.append(
+            {
+                "dot_number": c["dot_number"],
+                "legal_name": c["legal_name"],
+                "report": report.get("result", {}).get("content", ""),
+            }
+        )
 ```
 
 ### Step 5: Aggregate and Format the Digest
@@ -161,8 +176,14 @@ route_alert(
     subject=f"[SearchCarriers] Daily Vetting Digest -- {date} -- {health}",
     body=digest_content,
     alert_type="daily_digest",
-    metadata={"total": total, "passed": len(passed),
-              "review": len(review), "failed": len(failed), "health": health})
+    metadata={
+        "total": total,
+        "passed": len(passed),
+        "review": len(review),
+        "failed": len(failed),
+        "health": health,
+    },
+)
 ```
 
 Recipients are resolved from account notification settings. CRITICAL and AT RISK digests go to all configured recipients. HEALTHY digests respect digest frequency preferences (some users suppress all-clear digests).
@@ -181,11 +202,15 @@ A 3PL monitors 25 carriers. 20 auto-pass at LOW/MEDIUM. 4 ELEVATED go through ve
 
 An enterprise account monitors 50 carriers after a major insurer exits the trucking market. 8 show HIGH risk with insurance lapses. Digest: "Fleet Health: CRITICAL. 38 passed, 4 review, 8 failed." Full reports for all 8 failures. Subject: `[SearchCarriers] Daily Vetting Digest -- 2026-02-26 -- CRITICAL`. All contacts notified regardless of frequency preferences.
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| Empty watch list | No carriers or all PAUSED | Send empty digest; suggest adding carriers via `watchlist_manage` |
+| Empty watch list | No company watches configured | Send an empty digest; suggest adding carriers via `manage_watchlist` |
 | `risk_score` fails for one carrier | API timeout or transient error | Mark as UNKNOWN in digest, continue processing remaining carriers |
 | `vetting_check` fails | Missing upstream data or tier restriction | Show "VETTING ERROR" status with error message; do not block others |
 | `generate_report` fails | Ops Reporter MCP unreachable | Include summary without detailed report; note "report unavailable" |

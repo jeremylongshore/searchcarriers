@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-api-bridge
-description: >-
-  Manage API health, run bulk carrier lookups, sync TMS data, and configure
-  webhooks. Use when scaling carrier operations.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Manage API health, run bulk carrier lookups, sync TMS data, and configure webhooks. Use when scaling carrier operations.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: smb
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- plugin
 ---
 
 # API Bridge -- Embedded Skill
@@ -47,7 +50,7 @@ Bulk operations allow batch carrier lookups against the SearchCarriers API. All 
 **Bulk Lookup Pipeline**
 
 1. **Input validation**: Parse DOT numbers from list, file, or previous results. Deduplicate. Reject non-numeric entries.
-2. **Rate-limited execution**: Call `GET /api/v1/search?dotNumber={dot}&perPage=1` for each DOT at max 3/sec.
+2. **Rate-limited execution**: Call `GET /api/v3/search?dotNumber={dot}&perPage=1` for each DOT at max 3/sec.
 3. **Result aggregation**: Collect results into a structured array. Track success, not-found, and error counts.
 4. **Red flag scan**: For each found carrier, check status (ACTIVE/INACTIVE), power units (>0), and safety rating.
 5. **Summary generation**: Produce a results table with DOT, name, status, location, fleet size, and flag indicators.
@@ -84,7 +87,7 @@ Monitor the SearchCarriers API to detect outages, latency spikes, and rate limit
 |----------|-----------|-------------|
 | Search | `/search`, `/search/scac` | Lookup known DOT/SCAC |
 | Company Details | `/company/{dot}/inspections`, `insurances`, `authorities`, `out-of-service-orders`, `equipment`, `vehicles` | Request with `perPage=1` |
-| Authority | `/authority/{dot}/history` | Request with `perPage=1` |
+| Authority | `/authority/{docketNumber}/history` | Request with `perPage=1` |
 | Export | `/export` | Export single known DOT |
 | Watch | `/company/{dot}/watch` | GET watch status |
 
@@ -229,11 +232,15 @@ User wants real-time alerts when a watched carrier's insurance lapses.
 
 User asks to verify their TMS mapping before importing carrier data.
 
-1. Fetch a sample carrier via `/api/v1/search?dotNumber={dot}`
+1. Fetch a sample carrier via `/api/v3/search?dotNumber={dot}`
 2. Apply the standard field map from the table above
 3. Display side-by-side: SC field name, SC value, TMS field name, mapped value
 4. Flag any null or missing required fields
 5. Report: "Mapping valid. 2 optional fields null (DBA, email). All required fields populated."
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 
@@ -256,4 +263,4 @@ User asks to verify their TMS mapping before importing carrier data.
 - Rate limit guidance: max 3 req/sec, 5-min cache TTL
 - SearchCarriers API base: `https://searchcarriers.com/api/v1`
 - Auth format: `Authorization: Bearer {id}|{token}` (Laravel Sanctum)
-- Carrier object schema: 143 fields (see API-DISCOVERY.md)
+- Carrier object schema: selectable v3 sections (see API-DISCOVERY.md)

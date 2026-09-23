@@ -1,8 +1,13 @@
-# SearchCarriers Plugins + Skills
+# SearchCarriers Tools
 
 **Motor carrier intelligence for Claude Code.**
 
 Search, vet, and monitor 4M+ motor carriers directly from your terminal. Five plugins and fourteen skills provide structured carrier data -- carrier lookups, risk scoring, vetting reports, compliance monitoring, and TMS integration, all through natural language.
+
+The tools are open source under Apache-2.0. They are an independent client for
+the SearchCarriers service; API access and production data use still require an
+appropriate [SearchCarriers](https://searchcarriers.com/lander) account and are
+subject to its terms.
 
 Built for freight brokers, safety teams, and logistics ops who need answers, not dashboards.
 
@@ -25,8 +30,8 @@ Or paste the repo URL into any LLM and ask it to help you set up.
 Up and running in under 2 minutes:
 
 ```bash
-git clone https://github.com/intent-solutions-io/searchcarriers.git
-cd searchcarriers && ./scripts/setup-dev.sh
+git clone https://github.com/jeremylongshore/searchcarriers-tools.git
+cd searchcarriers-tools && ./scripts/setup-dev.sh
 ```
 
 Set your API key:
@@ -50,7 +55,7 @@ Then try your first lookup in Claude Code:
 | `searchcarriers-carrier-intel` | Stackable (INPUT) | Data retrieval | Free | Carrier lookup, entity mapping, fleet summary, SCAC/VIN resolution |
 | `searchcarriers-risk-engine` | Stackable (ANALYSIS) | Risk assessment | Pro | Risk scoring, vetting checks, insurance validation, compliance audit |
 | `searchcarriers-ops-reporter` | Stackable (OUTPUT) | Reporting | Pro | Vetting reports, fleet reports, carrier comparisons, data export |
-| `searchcarriers-watchdog` | Standalone | Monitoring | Pro+ | Carrier watch management, alert routing (Slack/Telegram/email), compliance drift detection |
+| `searchcarriers-watchdog` | Standalone | Monitoring | Pro+ | Carrier watch management, alert formatting, compliance drift detection |
 | `searchcarriers-api-bridge` | Standalone | Integration | SMB | Bulk carrier operations, TMS sync, webhook management, API health checks |
 
 ---
@@ -173,32 +178,18 @@ Tier gating is enforced at three layers: MCP server startup (API key check), per
 
 ---
 
-## API Reference Summary
+## API contract
 
-| | |
-|---|---|
-| **Base URL** | `https://searchcarriers.com/api/v1` |
-| **Auth** | `Authorization: Bearer {id}\|{token}` (Laravel Sanctum) |
-| **Rate Limit** | ~3 req/s recommended, respect `Retry-After` header |
-| **Pagination** | Laravel standard, max 1000 results |
+SearchCarriers capabilities currently span three API versions:
 
-### Key Endpoints
+- v3 for search, company field selection, equipment, and crashes
+- v2 for qualification reports
+- v1 for VIN/SCAC lookup, detailed history, export, and watches
 
-| Endpoint | Method | Path |
-|----------|--------|------|
-| Super Search | GET | `/api/v1/search` |
-| SCAC Lookup | GET | `/api/v1/search/scac` |
-| Inspections | GET | `/api/v1/company/{dot}/inspections` |
-| Insurances | GET | `/api/v1/company/{dot}/insurances` |
-| Authorities | GET | `/api/v1/company/{dot}/authorities` |
-| OOS Orders | GET | `/api/v1/company/{dot}/out-of-service-orders` |
-| Equipment | GET | `/api/v1/company/{dot}/equipment` |
-| Vehicles | GET | `/api/v1/company/{dot}/vehicles` |
-| Authority History | GET | `/api/v1/authority/{dot}/history` |
-| Export | GET | `/api/v1/export` |
-| Carrier Watch | GET/POST | `/api/v1/company/{dot}/watch` |
-
-Full API documentation, schemas, and field references: **[API-DISCOVERY.md](API-DISCOVERY.md)**
+The exact routes, verified parameter names, data-handling boundary, and source
+links live in **[API-DISCOVERY.md](API-DISCOVERY.md)**. In particular, v3 uses
+`docketNumber`, `perPage`, `addressState`, and `addressCity`; older names may be
+silently ignored even when the API returns HTTP 200.
 
 ---
 
@@ -218,7 +209,7 @@ Paid add-on workflows that chain multiple plugins together for automated carrier
 
 | Workflow | What It Does | Plugins Used |
 |----------|-------------|--------------|
-| Slack Carrier Watch | Route all Carrier Watch alerts to Slack with formatted cards | watchdog |
+| Slack Carrier Watch | Format validated external carrier notifications for Slack | watchdog |
 | Telegram Bot Lookup | `/dot 12345` in Telegram returns carrier summary | carrier-intel + api-bridge |
 | Compliance Dashboard Email | Weekly compliance report across all watched carriers | ops-reporter + watchdog |
 | Insurance Lapse Alert | Slack/email when insurance cancellation is detected | watchdog + risk-engine |
@@ -242,15 +233,15 @@ What a new user does after cloning:
 **Minute 0-1: Clone and setup.**
 
 ```bash
-git clone https://github.com/intent-solutions-io/searchcarriers.git
-cd searchcarriers && ./scripts/setup-dev.sh
+git clone https://github.com/jeremylongshore/searchcarriers-tools.git
+cd searchcarriers-tools && ./scripts/setup-dev.sh
 ```
 
 The setup script installs dependencies, validates your environment, and confirms everything is wired correctly.
 
 **Minute 1-2: Configure your API key.**
 
-Get your key from [searchcarriers.com/settings/api](https://searchcarriers.com/settings/api), then:
+Get your key from [SearchCarriers API settings](https://searchcarriers.com/settings/api-tokens), then:
 
 ```bash
 export SEARCHCARRIERS_API_KEY="your_id|your_token"
@@ -347,8 +338,8 @@ searchcarriers/
 ├── API-DISCOVERY.md             # Full API reference
 ├── MASTER-BLUEPRINT.md          # Architecture decisions
 ├── CHANGELOG.md
-├── VERSION                      # 0.1.0
-└── LICENSE                      # BSL 1.1
+├── VERSION                      # 0.2.0
+└── LICENSE                      # Apache-2.0
 ```
 
 ### Contributing
@@ -382,8 +373,10 @@ In short: the API returns carrier records, the skills layer adds interpretation,
 
 ## License
 
-This project is licensed under the [Business Source License 1.1](LICENSE).
+This project is licensed under the [Apache License 2.0](LICENSE).
 
-**Usage grant**: You may use, copy, and modify this software for development, testing, and internal evaluation. Production use requires an active [SearchCarriers](https://searchcarriers.com) subscription at the appropriate tier.
+Apache-2.0 governs this repository's code. Calls to the hosted
+[SearchCarriers](https://searchcarriers.com) API remain subject to the service's
+account requirements, subscription tiers, and terms.
 
 Copyright (c) 2026 Intent Solutions, LLC. All rights reserved.

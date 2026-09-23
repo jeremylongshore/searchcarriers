@@ -1,26 +1,31 @@
 ---
 name: searchcarriers-insurance-lapse-alert
-description: >-
-  Detect insurance cancellations or lapses on watched carriers and send
-  instant alerts via Slack or email. Use when monitoring insurance.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Detect insurance cancellations or lapses on watched carriers and send instant alerts via Slack or email. Use when monitoring insurance.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: proplus
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- workflow
 ---
 
 # Insurance Lapse Alert -- Workflow Skill
 
 ## Overview
 
-This workflow orchestrates the Watchdog and Risk Engine plugins into a focused insurance monitoring pipeline. It retrieves the active watch list, runs an insurance check against each watched carrier, detects lapses, cancellations, pending cancellations, and near-expiry policies, then routes critical findings as instant alerts through Slack or email.
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
-Insurance is the single most time-sensitive vetting dimension. A carrier whose BIPD coverage lapses is operating illegally, and any broker who tenders freight to an uninsured carrier inherits catastrophic liability. This workflow ensures your team learns about insurance changes within minutes, not days.
+This workflow orchestrates the Watchdog and Risk Engine plugins into a focused insurance monitoring pipeline. It retrieves the active watch list, runs an insurance check against each watched carrier, detects lapses, cancellations, pending cancellations, and near-expiry policies, then formats critical findings for Slack or email delivery by the caller.
+
+Insurance is a time-sensitive vetting dimension. This workflow produces current evidence and ready-to-send messages; notification timing depends on the caller's schedule and delivery system.
 
 **Cross-plugin orchestration**: This workflow bridges two plugins:
-- **searchcarriers-watchdog** -- provides `manage_watchlist` (to retrieve monitored carriers) and `route_alert` (to deliver notifications)
+- **searchcarriers-watchdog** -- provides `manage_watchlist` (to retrieve monitored carriers) and `route_alert` (to format notifications)
 - **searchcarriers-risk-engine** -- provides `insurance_check` (to validate coverage status per carrier)
 
 **Pipeline position**: Watchdog (MONITORING) + Risk Engine (ANALYSIS) -> Insurance Lapse Alert (WORKFLOW)
@@ -38,29 +43,21 @@ Insurance is the single most time-sensitive vetting dimension. A carrier whose B
 
 ### Step 1: Retrieve the Active Watch List
 
-Call the `manage_watchlist` MCP tool with `action: "list"` to retrieve all actively monitored carriers. Only carriers in ACTIVE monitoring state are checked; PAUSED and STALE carriers are skipped.
+Call the `manage_watchlist` MCP tool with `action: "list"` and check each
+returned carrier. Do not infer monitoring states, freshness states, alert
+counts, or watch dates that the tool did not return.
 
 ```python
 # Call manage_watchlist with action: "list"
-# Returns: list of watched carriers, each with:
-#   dot_number, carrier_name, monitoring_state, added_date, alert_count
+# Returns: list of watched carriers with id, dot_number, and carrier_name
 
 import json
 from datetime import datetime
 
-# Filter to only ACTIVE monitored carriers
-# PAUSED carriers are intentionally skipped by the user
-# STALE carriers have connectivity issues and should be flagged separately
+
 def get_active_watchlist(watchlist_response):
     carriers = watchlist_response.get("carriers", [])
-    active = [c for c in carriers if c.get("monitoring_state") == "ACTIVE"]
-    stale = [c for c in carriers if c.get("monitoring_state") == "STALE"]
-
-    if stale:
-        # Log stale carriers for the summary but do not check them
-        print(f"Warning: {len(stale)} carrier(s) in STALE state skipped")
-
-    return active, stale
+    return carriers, []
 ```
 
 If the watch list is empty, report: "No carriers on the watch list. Run `/sc-watch add {DOT}` to start monitoring." and stop.
@@ -81,6 +78,7 @@ For each active carrier on the watch list, call the `insurance_check` MCP tool f
 #   pending_cancellations: list of {policy_type, cancelled_date}
 #   coverage_gaps: list of {from_date, to_date, gap_days, severity}
 
+
 def run_insurance_checks(active_carriers):
     results = []
     for carrier in active_carriers:
@@ -93,7 +91,7 @@ def run_insurance_checks(active_carriers):
             "dot_number": dot,
             "carrier_name": name,
             "insurance": None,  # populated by MCP response
-            "error": None
+            "error": None,
         }
 
         try:
@@ -119,47 +117,50 @@ FINDING_TYPES = {
     "lapse": {
         "severity": "critical",
         "label": "Insurance Lapse",
-        "description": "BIPD coverage has lapsed -- carrier cannot legally operate"
+        "description": "BIPD coverage has lapsed -- carrier cannot legally operate",
     },
     "cancellation": {
         "severity": "critical",
         "label": "Insurance Cancelled",
-        "description": "Active BIPD policy cancelled with no replacement on file"
+        "description": "Active BIPD policy cancelled with no replacement on file",
     },
     "pending_cancellation": {
         "severity": "high",
         "label": "Cancellation Pending",
-        "description": "BIPD policy will be cancelled on {date} -- request replacement proof"
+        "description": "BIPD policy will be cancelled on {date} -- request replacement proof",
     },
     "near_expiry": {
         "severity": "high",
         "label": "Coverage Near Expiry",
-        "description": "BIPD coverage expires within 30 days with no renewal detected"
+        "description": "BIPD coverage expires within 30 days with no renewal detected",
     },
     "below_minimum": {
         "severity": "critical",
         "label": "Below Federal Minimum",
-        "description": "BIPD coverage amount is below the federal minimum for carrier operation type"
+        "description": "BIPD coverage amount is below the federal minimum for carrier operation type",
     },
     "cargo_missing": {
         "severity": "medium",
         "label": "Cargo Insurance Missing",
-        "description": "No active cargo insurance on file -- not federally required but industry standard"
-    }
+        "description": "No active cargo insurance on file -- not federally required but industry standard",
+    },
 }
+
 
 def detect_findings(check_results):
     findings = []
 
     for result in check_results:
         if result["error"]:
-            findings.append({
-                "dot_number": result["dot_number"],
-                "carrier_name": result["carrier_name"],
-                "type": "check_error",
-                "severity": "high",
-                "detail": f"Insurance check failed: {result['error']}"
-            })
+            findings.append(
+                {
+                    "dot_number": result["dot_number"],
+                    "carrier_name": result["carrier_name"],
+                    "type": "check_error",
+                    "severity": "high",
+                    "detail": f"Insurance check failed: {result['error']}",
+                }
+            )
             continue
 
         ins = result["insurance"]
@@ -168,56 +169,66 @@ def detect_findings(check_results):
 
         # CRITICAL: BIPD not active
         if not ins.get("bipd_active"):
-            findings.append({
-                "dot_number": dot,
-                "carrier_name": name,
-                "type": "lapse",
-                "severity": "critical",
-                "detail": FINDING_TYPES["lapse"]["description"]
-            })
+            findings.append(
+                {
+                    "dot_number": dot,
+                    "carrier_name": name,
+                    "type": "lapse",
+                    "severity": "critical",
+                    "detail": FINDING_TYPES["lapse"]["description"],
+                }
+            )
 
         # CRITICAL: BIPD below federal minimum
         elif not ins.get("bipd_adequate"):
             amount = ins.get("bipd_amount", 0)
-            findings.append({
-                "dot_number": dot,
-                "carrier_name": name,
-                "type": "below_minimum",
-                "severity": "critical",
-                "detail": f"BIPD coverage ${amount:,} is below federal minimum"
-            })
+            findings.append(
+                {
+                    "dot_number": dot,
+                    "carrier_name": name,
+                    "type": "below_minimum",
+                    "severity": "critical",
+                    "detail": f"BIPD coverage ${amount:,} is below federal minimum",
+                }
+            )
 
         # HIGH: Pending cancellations
         for pc in ins.get("pending_cancellations", []):
             cancel_date = pc.get("cancelled_date", "unknown")
-            findings.append({
-                "dot_number": dot,
-                "carrier_name": name,
-                "type": "pending_cancellation",
-                "severity": "high",
-                "detail": f"{pc.get('policy_type', 'BIPD')} cancellation pending on {cancel_date}"
-            })
+            findings.append(
+                {
+                    "dot_number": dot,
+                    "carrier_name": name,
+                    "type": "pending_cancellation",
+                    "severity": "high",
+                    "detail": f"{pc.get('policy_type', 'BIPD')} cancellation pending on {cancel_date}",
+                }
+            )
 
         # CRITICAL: Historical coverage gaps (recent, within 90 days)
         for gap in ins.get("coverage_gaps", []):
             if gap.get("severity") == "SEVERE":
-                findings.append({
-                    "dot_number": dot,
-                    "carrier_name": name,
-                    "type": "cancellation",
-                    "severity": "critical",
-                    "detail": f"Coverage gap: {gap['from_date']} to {gap['to_date']} ({gap['gap_days']} days)"
-                })
+                findings.append(
+                    {
+                        "dot_number": dot,
+                        "carrier_name": name,
+                        "type": "cancellation",
+                        "severity": "critical",
+                        "detail": f"Coverage gap: {gap['from_date']} to {gap['to_date']} ({gap['gap_days']} days)",
+                    }
+                )
 
         # MEDIUM: No cargo insurance
         if not ins.get("cargo_active"):
-            findings.append({
-                "dot_number": dot,
-                "carrier_name": name,
-                "type": "cargo_missing",
-                "severity": "medium",
-                "detail": FINDING_TYPES["cargo_missing"]["description"]
-            })
+            findings.append(
+                {
+                    "dot_number": dot,
+                    "carrier_name": name,
+                    "type": "cargo_missing",
+                    "severity": "medium",
+                    "detail": FINDING_TYPES["cargo_missing"]["description"],
+                }
+            )
 
     return findings
 ```
@@ -232,21 +243,22 @@ SEVERITY_ROUTING = {
         "channels": ["slack", "email"],  # Critical goes to both
         "slack_color": "#E01E5A",
         "slack_mention": "<!channel>",
-        "email_priority": "immediate"
+        "email_priority": "immediate",
     },
     "high": {
         "channels": ["slack"],  # High goes to Slack only
         "slack_color": "#ECB22E",
         "slack_mention": "<!here>",
-        "email_priority": "hourly_digest"
+        "email_priority": "hourly_digest",
     },
     "medium": {
         "channels": [],  # Medium: summary only, no instant routing
         "slack_color": "#36C5F0",
         "slack_mention": "",
-        "email_priority": "daily_digest"
-    }
+        "email_priority": "daily_digest",
+    },
 }
+
 
 def route_findings(findings, target_channel="slack"):
     routed = {"delivered": [], "skipped": [], "failed": []}
@@ -269,8 +281,8 @@ def route_findings(findings, target_channel="slack"):
                 "dot_number": finding["dot_number"],
                 "alert_type": finding["type"],
                 "severity": severity,
-                "description": finding["detail"]
-            }
+                "description": finding["detail"],
+            },
         }
 
         try:
@@ -290,7 +302,7 @@ Produce a consolidated summary of all findings and routing results.
 ```
 INSURANCE LAPSE ALERT -- MONITORING SUMMARY
 Run at:       {timestamp}
-Carriers:     {active_count} active, {stale_count} stale (skipped)
+Carriers:     {active_count} watched, {failed_count} check failures
 Channel:      {target_channel}
 
 FINDINGS
@@ -301,17 +313,17 @@ FINDINGS
 | 3 | MEDIUM   | 3456789 | ROAD RUNNER TRANSPORT| Cargo Missing         | No cargo insurance filed  |
 
 ROUTING STATUS
-  Critical alerts routed:  {count} (Slack + Email)
-  High alerts routed:      {count} (Slack)
-  Medium alerts:           {count} (summary only)
-  Failed deliveries:       {count}
+  Critical messages formatted: {count}
+  High messages formatted:     {count}
+  Medium findings:             {count} (summary only)
+  Formatting failures:         {count}
 
-{if stale_count > 0}
-STALE CARRIERS (not checked)
-| DOT     | Carrier              | State Since |
-|---------|----------------------|-------------|
-| {dot}   | {name}               | {date}      |
-Investigate connectivity for stale carriers: `/sc-watch refresh {DOT}`
+{if failed_count > 0}
+CHECK FAILURES
+| DOT     | Carrier              | Error |
+|---------|----------------------|-------|
+| {dot}   | {name}               | {error} |
+Retry after verifying authentication, plan access, and API availability.
 {end if}
 
 {if no findings}
@@ -367,6 +379,10 @@ NEXT STEPS
 3. Route both via `route_alert` with `channel: "email"`.
 4. Critical alert sent with immediate priority; high alert queued for hourly digest.
 5. Display summary with email delivery confirmation.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

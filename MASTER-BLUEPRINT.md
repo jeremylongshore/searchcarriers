@@ -1,24 +1,34 @@
 # 🏗️ SearchCarriers Master Blueprint
 # Plugin & Skill Repo - Implementation Plan
 # Version: 1.0.0 | Date: 2026-02-26
-# Owner: Jeremy Longshore + Garret (adrenallen)
-# Repo: intent-solutions-io/searchcarriers (private, BSL 1.1)
+# Owner: Jeremy Longshore / Intent Solutions
+# Repo: jeremylongshore/searchcarriers-tools (public, Apache-2.0)
 
 ## Context
 
-Garret (`adrenallen`) runs SearchCarriers.com - a motor carrier research platform with 4M+ companies, REST API (v1), TMS integrations, and tiered pricing (Free through Enterprise). We're building a private plugin + skills repo under `intent-solutions-io/searchcarriers` modeled after (and improved from) the nixtla plugins repo. The goal: real tools for freight professionals, not demos. Skills follow the `/skill-creator` spec as source of truth.
+SearchCarriers.com is a motor carrier research platform with API access, TMS
+integrations, and tiered plans. This independent repository packages plugins
+and skills for freight professionals. It began as a private implementation and
+is published from a clean, data-free source snapshot. Skills follow the
+`/skill-creator` spec as their authoring standard.
 
-## API Reality (Discovered 2026-02-26)
+## API Reality (Reviewed 2026-09-22)
 
-**API Base URL**: `https://searchcarriers.com/api/v1` (NOT v2 as originally assumed)
+**API origin**: `https://searchcarriers.com` with v3, v2, and v1 routes selected
+by capability. See `API-DISCOVERY.md` for the authoritative contract.
 
 **Auth**: `Authorization: Bearer {id}|{token}` (Laravel Sanctum)
 
-### Confirmed Endpoints (11)
+### Confirmed capability routes
 
 | Endpoint | Method | Path | Parameters |
 |----------|--------|------|------------|
-| Search | GET | `/api/v1/search` | superSearchTerm, dotNumber, legalName, mcNumber, state, city, zipCode, vin, perPage, page |
+| Search | GET | `/api/v3/search` | `superSearchTerm`, `dotNumber`, `docketNumber`, `addressState`, `addressCity`, `perPage`, `page` |
+| Company profile | GET | `/api/v3/company/{dot}` | `fields` |
+| Company equipment | GET | `/api/v3/company/{dot}/equipment` | Pagination/filter parameters |
+| Company crashes | GET | `/api/v3/company/{dot}/crashes` | Pagination/filter parameters |
+| Qualification reports | GET | `/api/v2/company/{dot}/qualification-reports` | |
+| VIN | GET | `/api/v1/search/by-vin/{vin}` | |
 | SCAC | GET | `/api/v1/search/scac` | scac |
 | Company Inspections | GET | `/api/v1/company/{dot}/inspections` | |
 | Company Insurances | GET | `/api/v1/company/{dot}/insurances` | |
@@ -26,16 +36,13 @@ Garret (`adrenallen`) runs SearchCarriers.com - a motor carrier research platfor
 | Company OOS Orders | GET | `/api/v1/company/{dot}/out-of-service-orders` | |
 | Company Equipment | GET | `/api/v1/company/{dot}/equipment` | |
 | Company Vehicles | GET | `/api/v1/company/{dot}/vehicles` | |
-| Authority History | GET | `/api/v1/authority/{dot}/history` | |
+| Authority History | GET | `/api/v1/authority/{docketNumber}/history` | Requires the MC/MX/FF docket number |
 | Export | GET | `/api/v1/export` | dot_numbers[], file_format |
 | Watch | GET/POST | `/api/v1/company/{dot}/watch` | |
 
-### Still Missing (from API reference but not found via probing)
-
-- Risk Factors endpoint
-- Vetting Report endpoint
-- Service Areas, Geo Location
-- Inspection Details (by inspection_id)
+Risk factors, service areas, and vetting reports are selectable sections of the
+v3 company response. The published API does not provide the formerly assumed
+alert-feed or webhook-management routes.
 
 ### Architecture Principle: Thin Wrapper + Thick Intelligence
 
@@ -47,7 +54,7 @@ Garret (`adrenallen`) runs SearchCarriers.com - a motor carrier research platfor
 - **Intelligence**: Claude interprets raw data ("is this carrier safe?" not just numbers)
 - **Pipeline**: Chain lookups automatically (search -> inspect -> assess -> report)
 - **Natural language**: `/sc-lookup JB Hunt in Arkansas` instead of curl
-- **Formatted reports**: Turn 143 fields into human-readable vetting reports
+- **Formatted reports**: Turn nested carrier data into human-readable vetting reports
 - **Comparison**: Side-by-side carrier analysis (no API endpoint for this)
 - **Alert interpretation**: "Insurance lapsed" not raw webhook JSON
 - **Custom vetting rules**: User-defined thresholds (min power units, max crash rate)
@@ -157,8 +164,8 @@ searchcarriers/
 ├── CLAUDE.md
 ├── README.md                                # Docs + catalog + tier matrix
 ├── CHANGELOG.md
-├── LICENSE                                  # BSL 1.1
-├── VERSION                                  # 0.1.0
+├── LICENSE                                  # Apache-2.0
+├── VERSION                                  # 0.2.0
 ├── .gitignore
 ├── .editorconfig
 └── pyproject.toml
@@ -186,10 +193,10 @@ searchcarriers/
 
 | MCP Tool | Wraps API Endpoint(s) |
 |----------|----------------------|
-| `carrier_lookup` | `GET /api/v1/search` (superSearchTerm, dotNumber, legalName, mcNumber, state, city, zipCode) |
-| `carrier_profile` | `GET /api/v1/search?dotNumber=` + `GET /api/v1/company/{dot}/authorities` + `GET /api/v1/company/{dot}/insurances` |
-| `entity_map` | `GET /api/v1/search?vin=` (related companies by VIN) |
-| `fleet_summary` | `GET /api/v1/company/{dot}/equipment` + `GET /api/v1/company/{dot}/vehicles` |
+| `carrier_lookup` | `GET /api/v3/search` with current v3 parameters; dedicated v1 paths for VIN and SCAC |
+| `carrier_profile` | `GET /api/v3/company/{dot}?fields=...` |
+| `entity_map` | v3 company/equipment plus `GET /api/v1/search/by-vin/{vin}` |
+| `fleet_summary` | `GET /api/v3/company/{dot}/equipment` |
 
 Each plugin's MCP tools explicitly document their input/output so Claude can chain them without human guidance.
 
@@ -277,7 +284,7 @@ allowed-tools: "Read,Grep,Bash(python:*)"
 metadata:
   author: Jeremy Longshore <jeremy@intentsolutions.io>
   version: 1.0.0
-  license: BUSL-1.1
+  license: Apache-2.0
 ---
 ```
 
@@ -390,10 +397,10 @@ TOOL_TIERS = {
 ## Build Phases
 
 ### Phase 1: Repo Foundation
-1. Create private repo `intent-solutions-io/searchcarriers`
-2. Add `adrenallen` (Garret) as collaborator
+1. Create the original private development repo, then publish a clean source snapshot
+2. Configure maintainers through the public repository's GitHub permissions
 3. Initialize structure: `.github/`, `plugins/`, `skills/`, `scripts/`, `tests/`, `templates/`, `inventory/`
-4. Write LICENSE (BSL 1.1), CLAUDE.md, README.md, .gitignore, .editorconfig, VERSION, pyproject.toml
+4. Write LICENSE (Apache-2.0), CLAUDE.md, README.md, .gitignore, .editorconfig, VERSION, pyproject.toml
 5. Write 6-doc enterprise templates in `templates/` (adapted from nixtla's 000a-dev-planning-templates)
 6. Write inventory CSVs with all 5 plugins + 19 skills (status: ⬜ planned)
 7. Write inventory README explaining CSV columns
@@ -444,7 +451,7 @@ TOOL_TIERS = {
 32. Verify tier gating end-to-end
 33. Verify all SKILL.md files use `{baseDir}/` (no absolute paths)
 34. Test onboarding flow (fresh clone -> working in < 2 min)
-35. Update CHANGELOG.md, tag v0.1.0
+35. Historical milestone: update CHANGELOG.md and tag the initial v0.1.0
 
 ## Verification
 
@@ -470,7 +477,7 @@ TOOL_TIERS = {
 | `plugins/*/docs/01-06` | Per-plugin enterprise documentation (PRD, Architecture, etc.) |
 | `plugins/*/scripts/*_mcp.py` | MCP servers with tier gating |
 | `skills/*/SKILL.md` | Standalone skills with `{baseDir}/` refs |
-| `LICENSE` | BSL 1.1 (production use requires SC subscription) |
+| `LICENSE` | Apache-2.0; API use still requires a SearchCarriers subscription |
 
 ## Reference Repos (Source Material)
 

@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-bulk-vetting-pipeline
-description: >-
-  Upload a list of carriers, run full vetting on each, and produce a
-  consolidated report with pass/fail results. Use when vetting in bulk.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Upload a list of carriers, run full vetting on each, and produce a consolidated report with pass/fail results. Use when vetting in bulk.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: Jeremy Longshore <jeremy@intentsolutions.io>
-  version: 0.1.0
-  license: BUSL-1.1
   tier: smb
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- workflow
 ---
 
 # Bulk Vetting Pipeline -- Workflow Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This workflow orchestrates a cross-plugin pipeline that takes a list of carrier DOT numbers (up to 100), runs each through the full vetting pipeline, and produces a consolidated pass/fail report with a CSV export. It coordinates three plugins in sequence: API Bridge (bulk ingestion), Risk Engine (scoring and vetting), and Ops Reporter (report generation and export).
 
@@ -206,6 +211,10 @@ User asks: "Re-vet the 3 carriers that failed last batch."
 2. Run the full pipeline on just those 3 carriers.
 3. If any now PASS (data corrected, insurance updated), report the change.
 4. If still failing, confirm the same or different rules are triggering.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

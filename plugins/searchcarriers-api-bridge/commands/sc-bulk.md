@@ -46,7 +46,7 @@ Rate limit: 3 requests/second with 5-min cache
 ```
 
 4. Process carriers sequentially at max 3 requests/second
-5. For each carrier, call the SearchCarriers API `GET /api/v1/search?dotNumber={dot}&perPage=1`
+5. For each carrier, call the SearchCarriers API `GET /api/v3/search?dotNumber={dot}&perPage=1`
 6. Track progress and display updates every 10 carriers or every 10 seconds
 
 ### File Import (`file`)

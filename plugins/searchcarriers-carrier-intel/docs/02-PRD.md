@@ -66,14 +66,14 @@ As a **operations manager**, I want to **see a carrier's fleet composition -- eq
 
 ### FR-01: Multi-Format Search with Auto-Detection
 
-**Description:** The `carrier_lookup` tool accepts a search term and automatically determines the search strategy. If the input looks like a DOT number (all digits), search by `dotNumber`. If it matches MC format (e.g., "MC 1672915"), search by `mcNumber`. If it contains a VIN pattern (17 alphanumeric), search by `vin`. Otherwise, use `superSearchTerm` for fuzzy name matching.
+**Description:** The `carrier_lookup` tool accepts a search term and automatically determines the search strategy. If the input looks like a DOT number (all digits), search by `dotNumber`. If it matches MC format (e.g., "MC 1672915"), search by `docketNumber`. If it contains a VIN pattern (17 alphanumeric), search by `vin`. Otherwise, use `superSearchTerm` for fuzzy name matching.
 
 **Acceptance Criteria:**
 - Input "69494" searches by dotNumber and returns Werner Enterprises
-- Input "MC 123456" searches by mcNumber
+- Input "MC 123456" searches v3 by `docketNumber`
 - Input "Werner" searches by superSearchTerm
-- Input "1FUJGHDV0CLBP8834" searches by vin
-- State, city, and zipCode can be passed as additional filters
+- Input "1FUJGHDV0CLBP8834" uses the dedicated v1 VIN path
+- State and city use the v3 `addressState` and `addressCity` filters
 - Returns paginated results (default 10 per page)
 
 **Priority:** P0
@@ -92,7 +92,7 @@ As a **operations manager**, I want to **see a carrier's fleet composition -- eq
 
 ### FR-03: VIN-Based Entity Mapping
 
-**Description:** The `entity_map` tool takes a DOT number, retrieves the carrier's equipment roster via `GET /company/{dot}/equipment`, extracts all VINs, then searches each VIN via `GET /search?vin=` to find other carriers that have registered the same equipment. Returns a relationship map.
+**Description:** The `entity_map` tool takes a DOT number, retrieves the carrier's equipment roster via `GET /company/{dot}/equipment`, extracts all VINs, then searches each VIN via `GET /search/by-vin/` to find other carriers that have registered the same equipment. Returns a relationship map.
 
 **Acceptance Criteria:**
 - Retrieves full equipment list for the target carrier
@@ -146,7 +146,7 @@ As a **operations manager**, I want to **see a carrier's fleet composition -- eq
 
 ## MVP Scope
 
-Ships in v0.1.0:
+Historical v0.1.0 planning scope:
 
 - [x] `carrier_lookup` -- multi-format search with auto-detection
 - [x] `carrier_profile` -- aggregated profile (search + authorities + insurance)

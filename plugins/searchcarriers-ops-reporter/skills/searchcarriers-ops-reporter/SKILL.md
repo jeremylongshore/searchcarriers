@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-ops-reporter
-description: >-
-  Generate vetting reports, fleet analysis, comparisons, and data exports.
-  Use when producing carrier documentation or formatted output.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Generate vetting reports, fleet analysis, comparisons, and data exports. Use when producing carrier documentation or formatted output.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- plugin
 ---
 
 # Ops Reporter -- Embedded Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This skill provides the output layer for the searchcarriers Ops Reporter plugin. It teaches you how to consume upstream pipeline data from Carrier Intel (INPUT) and Risk Engine (ANALYSIS), produce formatted reports, comparisons, fleet analyses, and data exports, and maintain output quality standards across all document types.
 
@@ -87,7 +92,7 @@ Each Risk Engine tool response includes a `_pipeline` key:
   "_pipeline": {
     "source": "searchcarriers-risk-engine",
     "tool": "risk_score",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "dot_number": 1234567,
     "timestamp": "2026-02-26T14:30:00Z",
     "tier": "pro",
@@ -166,7 +171,7 @@ Ops Reporter is the terminal stage, but its outputs include a `_pipeline` key fo
   "_pipeline": {
     "source": "searchcarriers-ops-reporter",
     "tool": "generate_report",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "dot_number": 1234567,
     "timestamp": "2026-02-26T15:00:00Z",
     "tier": "pro",
@@ -227,6 +232,10 @@ User asks: "/sc-report 1234567 --no-risk"
 2. Call `generate_report` with carrier data but no risk assessment
 3. Display report with risk section omitted
 4. Note: "Risk assessment was skipped. Run `/sc-report 1234567` for the full pipeline."
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

@@ -1,3 +1,17 @@
+---
+name: carrier-analyst
+description: Research a motor carrier through the current SearchCarriers API contract and produce an evidence-based carrier profile.
+tools: Read, Grep, Bash
+disallowedTools: []
+model: inherit
+color: blue
+version: 0.2.0
+author: Jeremy Longshore
+tags: [searchcarriers, motor-carrier, carrier-analyst]
+skills: [searchcarriers-carrier-intel]
+background: false
+---
+
 # Carrier Analyst Agent
 
 ## Identity

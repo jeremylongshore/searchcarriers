@@ -28,7 +28,7 @@ If the argument does not match a known target, treat it as a DOT number and use 
 
 Before checking any data endpoints, verify the API key:
 
-1. Make a lightweight request to `GET /api/v1/search?dotNumber=1&perPage=1`
+1. Make a lightweight request to `GET /api/v3/search?dotNumber=1&perPage=1`
 2. If 401: report authentication failure and stop -- no point checking further
 3. If 200: extract response time and continue
 

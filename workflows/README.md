@@ -14,7 +14,7 @@ Cross-plugin workflow orchestrations that chain multiple MCP tools together. The
 
 | Workflow | Plugins Used | Description |
 |----------|-------------|-------------|
-| [Slack Carrier Watch](proplus/slack-carrier-watch/SKILL.md) | Watchdog | Route all Carrier Watch alerts to Slack with Block Kit cards |
+| [Slack Carrier Watch](proplus/slack-carrier-watch/SKILL.md) | Watchdog | Format validated external carrier notifications as Slack Block Kit payloads |
 | [Insurance Lapse Alert](proplus/insurance-lapse-alert/SKILL.md) | Risk Engine + Watchdog | Instant alert on insurance cancellation or lapse |
 | [Compliance Dashboard](proplus/compliance-dashboard/SKILL.md) | Risk Engine + Watchdog + Ops Reporter | Weekly compliance report with drift tracking |
 

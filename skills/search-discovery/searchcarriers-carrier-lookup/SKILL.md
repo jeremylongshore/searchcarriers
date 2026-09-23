@@ -1,21 +1,26 @@
 ---
 name: searchcarriers-carrier-lookup
-description: >-
-  Searches carriers by DOT, MC, name, VIN, or SCAC from 4M+ companies and
-  returns formatted summaries. Use when looking up a motor carrier.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Searches carriers by DOT, MC, name, VIN, or SCAC from 4M+ companies and returns formatted summaries. Use when looking up a motor carrier.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: free
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- search-discovery
 ---
 
 # Carrier Lookup
 
 ## Overview
 
-SearchCarriers exposes 143 fields per carrier record spanning identity, contact information, fleet composition, operations authority, safety history, and cargo classifications. This skill teaches you how to detect a user's search intent, select the correct endpoint and parameters, execute the lookup, and distill the raw response into a concise, actionable summary that highlights what matters in freight due diligence.
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
+
+SearchCarriers exposes selectable v3 company sections spanning identity, contact information, fleet composition, operating authority, safety history, and cargo classifications. This skill teaches you how to detect a user's search intent, select the correct endpoint and parameters, execute the lookup, and distill the response into a concise due-diligence summary.
 
 ## Prerequisites
 
@@ -32,11 +37,11 @@ Parse the user's request and classify it into exactly one search type:
 | User Signal | Search Type | Endpoint | Key Parameter |
 |---|---|---|---|
 | 7-digit number, "DOT" prefix | DOT lookup | `GET /search` | `dotNumber` |
-| "MC" followed by digits | MC lookup | `GET /search` | `mcNumber` |
-| Company name string | Name search | `GET /search` | `superSearchTerm` or `legalName` |
+| "MC" followed by digits | MC lookup | `GET /search` | `docketNumber` |
+| Company name string | Name search | `GET /search` | `superSearchTerm` or `superSearchTerm` |
 | 17-character alphanumeric | VIN search | `GET /search` | `vin` |
 | 2-4 letter carrier code | SCAC lookup | `GET /search/scac` | `scac` |
-| State/city/zip mention | Location search | `GET /search` | `state`, `city`, `zipCode` |
+| State/city/zip mention | Location search | `GET /api/v3/search` | MCP inputs `state`/`city` map to `addressState`/`addressCity`; `zipCode` passes through |
 
 When a query combines multiple signals (e.g., "Find Pacific trucking in Texas"), use all applicable parameters together on a single call.
 
@@ -47,7 +52,7 @@ If the input is ambiguous, prefer `superSearchTerm` as it searches across multip
 Construct the curl command following this pattern:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?<params>" \
+curl -s "https://searchcarriers.com/api/v3/search?<params>" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -126,7 +131,7 @@ When a search returns multiple carriers:
 **User**: "Look up DOT 12345"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -138,7 +143,7 @@ Format the single result into the full summary template. Flag any safety or insu
 **User**: "Find carriers named Pacific in Texas"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm=Pacific&state=TX&perPage=25" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm=Pacific&addressState=TX&perPage=25" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -150,7 +155,7 @@ Present abbreviated multi-result list. Offer to drill into a specific DOT.
 **User**: "What's MC 1672915?"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?mcNumber=1672915" \
+curl -s "https://searchcarriers.com/api/v3/search?docketNumber=1672915" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -172,12 +177,16 @@ curl -s "https://searchcarriers.com/api/v1/search/scac?scac=HJBT" \
 **User**: "Find active hazmat carriers in Ohio"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?state=OH&status=ACTIVE&perPage=50" \
+curl -s "https://searchcarriers.com/api/v3/search?addressState=OH&status=ACTIVE&perPage=50" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
 
 Post-filter results for carriers where the HM flag is true.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

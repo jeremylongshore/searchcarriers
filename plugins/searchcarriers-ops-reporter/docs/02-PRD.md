@@ -190,7 +190,7 @@ As a **load planner**, I want to **see a carrier's fleet composition report**, s
 
 ## MVP Scope
 
-Ships in v0.1.0:
+Historical v0.1.0 planning scope:
 
 - [ ] `generate_report` -- formatted vetting report with all sections
 - [ ] `generate_fleet` -- fleet analysis with equipment breakdown

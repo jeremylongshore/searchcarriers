@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Status / code translation maps
 # ---------------------------------------------------------------------------
@@ -128,11 +127,14 @@ def normalize_carrier(raw: dict[str, Any]) -> dict[str, Any]:
     operating_status = STATUS_CODE_MAP.get(str(raw_status).strip(), str(raw_status))
 
     # Entity / operation type
-    entity_type = _first(
-        raw.get("entityType"),
-        raw.get("carrierType"),
-        raw.get("business_org_desc"),
-    ) or ""
+    entity_type = (
+        _first(
+            raw.get("entityType"),
+            raw.get("carrierType"),
+            raw.get("business_org_desc"),
+        )
+        or ""
+    )
 
     # Address — real API uses phy_street etc, fixtures use phyStreet
     street = _first(raw.get("phy_street"), raw.get("phyStreet"), raw.get("street")) or ""
@@ -164,7 +166,9 @@ def normalize_carrier(raw: dict[str, Any]) -> dict[str, Any]:
     oos_rate_driver = raw.get("oosRateDriver")
 
     # MCS-150
-    mcs150_date = str(_first(raw.get("mcs150_date"), raw.get("mcs150Date"), raw.get("mcs150FormDate")) or "")
+    mcs150_date = str(
+        _first(raw.get("mcs150_date"), raw.get("mcs150Date"), raw.get("mcs150FormDate")) or ""
+    )
 
     # Cargo
     cargo_carried = raw.get("cargo_carried") or []
@@ -184,6 +188,7 @@ def normalize_carrier(raw: dict[str, Any]) -> dict[str, Any]:
     op_class = raw.get("operation_classifications") or []
     if isinstance(op_class, str):
         import json as _json
+
         try:
             op_class = _json.loads(op_class)
         except (ValueError, TypeError):
@@ -249,29 +254,27 @@ def normalize_authority(raw: Any) -> list[dict[str, Any]]:
                 code = str(record.get(stat_field) or "").strip()
                 if code:
                     status = AUTHORITY_STAT_MAP.get(code, code)
-                    results.append({
-                        "type": auth_type,
-                        "status": status,
-                        "docket_number": docket,
-                    })
+                    results.append(
+                        {
+                            "type": auth_type,
+                            "status": status,
+                            "docket_number": docket,
+                        }
+                    )
         else:
             # Fixture shape: already separated
-            auth_type = str(
-                _first(record.get("type"), record.get("authorityType")) or "Unknown"
-            )
+            auth_type = str(_first(record.get("type"), record.get("authorityType")) or "Unknown")
             status = str(record.get("status") or "Unknown")
-            docket = str(
-                _first(record.get("docket_number"), record.get("docketNumber")) or ""
+            docket = str(_first(record.get("docket_number"), record.get("docketNumber")) or "")
+            granted = str(_first(record.get("grantedDate"), record.get("effectiveDate")) or "")
+            results.append(
+                {
+                    "type": auth_type,
+                    "status": status,
+                    "docket_number": docket,
+                    "granted_date": granted,
+                }
             )
-            granted = str(
-                _first(record.get("grantedDate"), record.get("effectiveDate")) or ""
-            )
-            results.append({
-                "type": auth_type,
-                "status": status,
-                "docket_number": docket,
-                "granted_date": granted,
-            })
 
     return results
 
@@ -316,19 +319,19 @@ def normalize_insurance(raw: Any) -> list[dict[str, Any]]:
             effective = str(record.get("effective_date") or "")
             status = "Active" if coverage > 0 else "Inactive"
 
-            results.append({
-                "type": ins_type,
-                "status": status,
-                "coverage": coverage,
-                "policy_number": policy,
-                "insurer": insurer,
-                "effective_date": effective,
-            })
+            results.append(
+                {
+                    "type": ins_type,
+                    "status": status,
+                    "coverage": coverage,
+                    "policy_number": policy,
+                    "insurer": insurer,
+                    "effective_date": effective,
+                }
+            )
         else:
             # Fixture shape
-            ins_type = str(
-                _first(record.get("type"), record.get("insuranceType")) or "Unknown"
-            )
+            ins_type = str(_first(record.get("type"), record.get("insuranceType")) or "Unknown")
             coverage = record.get("coverage") or record.get("coverageAmount") or 0
             try:
                 coverage = int(coverage)
@@ -340,27 +343,26 @@ def normalize_insurance(raw: Any) -> list[dict[str, Any]]:
                     record.get("insuranceCarrier"),
                     record.get("insurerName"),
                     record.get("insurer"),
-                ) or ""
+                )
+                or ""
             )
-            policy = str(
-                _first(record.get("policyNumber"), record.get("policy_number")) or ""
-            )
+            policy = str(_first(record.get("policyNumber"), record.get("policy_number")) or "")
             status = str(record.get("status") or "Unknown")
-            effective = str(
-                _first(record.get("effectiveDate"), record.get("inceptionDate")) or ""
-            )
+            effective = str(_first(record.get("effectiveDate"), record.get("inceptionDate")) or "")
             cancellation = str(
                 _first(record.get("cancellationDate"), record.get("expirationDate")) or ""
             )
 
-            results.append({
-                "type": ins_type,
-                "status": status,
-                "coverage": coverage,
-                "policy_number": policy,
-                "insurer": insurer,
-                "effective_date": effective,
-                "cancellation_date": cancellation,
-            })
+            results.append(
+                {
+                    "type": ins_type,
+                    "status": status,
+                    "coverage": coverage,
+                    "policy_number": policy,
+                    "insurer": insurer,
+                    "effective_date": effective,
+                    "cancellation_date": cancellation,
+                }
+            )
 
     return results

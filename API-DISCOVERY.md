@@ -1,198 +1,150 @@
-# SearchCarriers API Discovery Notes
+# SearchCarriers API contract
 
-**Date**: 2026-02-26
-**Base URL**: `https://searchcarriers.com/api/v1`
-**Auth**: `Authorization: Bearer {id}|{token}` (Laravel Sanctum)
-**Status**: 11 endpoints confirmed, risk-factors + vetting still missing
+This repository uses a versioned, hybrid API contract. Do not assume that the
+highest version contains every resource, and do not copy parameter names from
+an older search route into v3. SearchCarriers may return HTTP 200 while ignoring
+an unknown filter, so route tests must assert the request parameters and the
+response structure.
 
-## Confirmed Endpoints (11)
+Contract reviewed: 2026-09-22 against the public OpenAPI document, the
+SearchCarriers 1.31.0 release notes, and authenticated structural probes. Live
+probe output recorded only status codes and object shapes; API response data is
+not committed to this repository.
 
-### Search (3 endpoints)
+## Authentication
 
-#### GET /api/v1/search (Super Search)
-| Param | Type | Notes |
-|-------|------|-------|
-| `superSearchTerm` | string | Fuzzy search across name, DOT, MC, etc. |
-| `dotNumber` | string | Exact DOT lookup (returns 0 or 1 result) |
-| `legalName` | string | Company name search |
-| `mcNumber` | string | MC number search (e.g., "MC 1672915") |
-| `state` | string | State filter (e.g., "TX") |
-| `city` | string | City filter |
-| `zipCode` | string | ZIP code filter |
-| `vin` | string | VIN search (related companies) |
-| `carrierOperation` | string | Operation type ("A" = authorized) |
-| `status` | string | Status code ("A" = active) |
-| `perPage` | int | Results per page (default: 10) |
-| `page` | int | Page number |
+Send the token as a bearer value:
 
-Pagination: Laravel standard. Total capped at 1000.
+```http
+Authorization: Bearer {token-id}|{token-secret}
+Accept: application/json
+```
 
-#### GET /api/v1/search/scac (SCAC Lookup)
-| Param | Type | Notes |
-|-------|------|-------|
-| `scac` | string | SCAC code (e.g., "HJBT") |
+Create tokens in [SearchCarriers API settings](https://searchcarriers.com/settings/api-tokens).
+Keep tokens in a secret manager or process environment. Never commit tokens or
+API response datasets.
 
-Returns: `{ code, name, company }` (company is linked carrier or null)
+## Version routing
 
-#### GET /api/v1/search?vin= (Related Companies by VIN)
-Uses the main search endpoint with `vin` parameter.
+| Capability | Version and route |
+|---|---|
+| Carrier search | `GET /api/v3/search` |
+| Company profile with selected sections | `GET /api/v3/company/{dotNumber}` |
+| Equipment | `GET /api/v3/company/{dotNumber}/equipment` |
+| Crashes | `GET /api/v3/company/{dotNumber}/crashes` |
+| Qualification reports | `GET /api/v2/company/{dotNumber}/qualification-reports` |
+| VIN lookup | `GET /api/v1/search/by-vin/{vin}` |
+| SCAC lookup | `GET /api/v1/search/scac?scac={code}` |
+| Inspections | `GET /api/v1/company/{dotNumber}/inspections` |
+| Out-of-service orders | `GET /api/v1/company/{dotNumber}/out-of-service-orders` |
+| Authority history | `GET /api/v1/authority/{docketNumber}/history` |
+| Bulk export | `GET /api/v1/export` |
+| List watches | `GET /api/v1/company/watch` |
+| Read or update one watch | `GET/POST /api/v1/company/{dotNumber}/watch` |
 
-### Company Details (7 endpoints)
+The published API does not expose `/api/v1/carrier-watch`,
+`/api/v1/carrier-watch/alerts`, or `/api/v1/webhooks`. The API Bridge webhook
+tool manages a local configuration file for downstream software; it does not
+create SearchCarriers webhooks. The Watchdog compatibility `get_alerts` tool
+returns a structured unavailable response rather than calling an invented route.
 
-#### GET /api/v1/company/{dot}/insurances
-Paginated. Returns insurance records.
-Schema: (returned empty for test carrier - need carrier with active insurance)
+## v3 search parameters
 
-#### GET /api/v1/company/{dot}/inspections
-Paginated. Returns inspection history with violations and per-unit data.
-Schema (58+ fields):
-- `inspection_id`, `dot_number`, `report_state`, `report_number`
-- `insp_date`, `insp_start_time`, `insp_end_time`, `insp_level_id`
-- `location`, `location_desc`, `county_code_state`, `county_code`
-- `viol_total`, `oos_total`, `driver_viol_total`, `driver_oos_total`
-- `vehicle_viol_total`, `vehicle_oos_total`, `hazmat_viol_total`, `hazmat_oos_total`
-- `gross_comb_veh_wt`, `post_acc_ind`, `alcohol_control_sub`, `drug_intrdctn_search`
-- `insp_carrier_name`, `insp_carrier_street/city/state/zip_code`
-- `violations` (list): `{ part_no, part_no_section, violation_description, ... }`
-- `per_units` (list): per-vehicle unit data
-- `company` (dict): embedded carrier object
+| Intent | Parameter |
+|---|---|
+| USDOT number | `dotNumber` |
+| MC, MX, or FF docket number | `docketNumber` |
+| Name or broad text | `superSearchTerm` |
+| State | `addressState` |
+| City | `addressCity` |
+| Page size | `perPage` |
+| Page | `page` |
 
-#### GET /api/v1/company/{dot}/authorities
-Returns authority status records.
-Schema:
-- `dot_number`, `docket_number`
-- `broker_authority_status`, `contract_authority_status`, `common_authority_status`
-- `sub_types`: `{ passenger: bool, property: bool, household_goods: bool }`
-- `status_since_date`
+Use `docketNumber`, not `mcNumber`; `perPage`, not `per_page`; and
+`addressState`/`addressCity`, not `state`/`city`. Use the dedicated v1 VIN path;
+the `vin` query parameter is not a v3 search filter.
 
-#### GET /api/v1/company/{dot}/out-of-service-orders
-Paginated. OOS order history.
+Example:
 
-#### GET /api/v1/company/{dot}/equipment
-Equipment/VIN detail.
-Schema:
-- `type`, `sub_type`, `vin`, `license_state`, `license_number`
-- `make`, `model`, `company_vehicle_number`, `year`
-- `vin_errors` (bool), `gvwr`, `trim`, `length`
+```bash
+curl --fail-with-body --get 'https://searchcarriers.com/api/v3/search' \
+  --header "Authorization: Bearer ${SEARCHCARRIERS_API_KEY}" \
+  --header 'Accept: application/json' \
+  --data-urlencode 'superSearchTerm=Example Freight' \
+  --data-urlencode 'addressState=TX' \
+  --data-urlencode 'perPage=25'
+```
 
-#### GET /api/v1/company/{dot}/vehicles
-Vehicle list (simpler than equipment).
-Schema:
-- `type`, `vin`, `license_plate_state`, `license_plate_number`
-- `make`, `company_vehicle_number`
+## v3 company sections
 
-#### GET /api/v1/company/{dot}/watch
-GET: Returns current watch status for carrier (data: [])
-POST: Adds carrier to watchlist. Returns `{ message: "Company watches updated successfully" }`
+Pass a comma-separated `fields` parameter when requesting a company. The
+verified selectable sections are:
 
-### Inspection (2 endpoints)
+- `contact`
+- `inspections`
+- `safety`
+- `oos_orders`
+- `oos_percents`
+- `authorities`
+- `insurance`
+- `equipment`
+- `operation`
+- `service_areas`
+- `risk_factors`
+- `basic_scores`
+- `vetting_report`
 
-#### GET /api/v1/inspections (Search)
-| Param | Type | Notes |
-|-------|------|-------|
-| `dot_number` | string | DOT number |
+Example:
 
-Paginated. Same schema as company/{dot}/inspections.
+```bash
+curl --fail-with-body --get \
+  'https://searchcarriers.com/api/v3/company/1234567' \
+  --header "Authorization: Bearer ${SEARCHCARRIERS_API_KEY}" \
+  --header 'Accept: application/json' \
+  --data-urlencode 'fields=contact,safety,authorities,insurance,risk_factors'
+```
 
-#### Inspection Details
-Endpoint path: NOT FOUND YET. Listed in API docs but couldn't discover route.
+Use the response's nested sections directly. The MCP compatibility normalizer
+adds selected legacy camel-case aliases only when older report code needs them;
+it does not fabricate missing values.
 
-### Authority (1 endpoint)
+## Watches
 
-#### GET /api/v1/authority/{dot}/history
-Paginated. Authority status change history.
+Synchronize the watch types for a company with a POST body:
 
-### Export (1 endpoint)
+```json
+{"watch_types":["all","details","inspections"]}
+```
 
-#### GET /api/v1/export
-Bulk export carriers.
-| Param | Type | Required |
-|-------|------|----------|
-| `dot_numbers[]` | array | Yes |
-| `file_format` | string | Yes |
+To stop watching, POST an empty array. No DELETE route is documented.
 
-Returns carrier data array directly (not paginated).
+## Pagination and errors
 
-### Company Watches (3 endpoints)
+Treat `data`, `links`, and `meta` as the v3 paginated envelope. Follow returned
+pagination metadata instead of assuming a fixed result limit. Handle at least:
 
-#### GET /api/v1/company/{dot}/watch
-Check watch status for a carrier.
+- `401`: missing or invalid token
+- `403`: subscription tier does not permit the operation
+- `404`: resource or company not found
+- `422`: invalid parameter or request body
+- `429`: rate limit; honor `Retry-After`
+- `5xx`: transient service error; use bounded backoff
 
-#### POST /api/v1/company/{dot}/watch
-Add carrier to watchlist.
+Do not treat a 200 response alone as proof that a filter worked. Contract tests
+must verify the outgoing parameter name and should use a query with a known
+small result set when running an authorized live smoke test.
 
-#### DELETE /api/v1/company/{dot}/watch (assumed)
-Remove carrier from watchlist. (Not tested yet)
+## Data handling
 
-## Carrier Object Schema (143 fields)
+SearchCarriers API results are licensed service data. Do not commit live
+responses, export them as public fixtures, or redistribute result datasets.
+Tests in this repository use invented companies, reserved example domains, and
+synthetic identifiers. Users remain responsible for their SearchCarriers
+subscription and the service terms.
 
-### Identity
-- `id` (int), `dot_number` (str), `docket_numbers` (list), `legal_name` (str), `dba_name` (str)
-- `dun_bradstreet_no` (str), `scac` (str|null)
-- `status_code` (str: A=Active), `add_date` (datetime), `mcs150_date` (datetime)
+## Sources
 
-### Contact
-- `phone`, `fax`, `cell_phone`, `email_address` (all str)
-
-### Physical Address
-- `phy_street`, `phy_city`, `phy_state`, `phy_zip`, `phy_country`, `phy_cnty`
-
-### Mailing Address
-- `carrier_mailing_street`, `_city`, `_state`, `_zip`, `_country`, `_cnty`
-
-### Fleet/Equipment
-- `power_units` (int), `truck_units`, `bus_units`, `total_cars` (str)
-- `fleetsize` (str: 0/A/B/C/D/E/F), `total_drivers`, `total_cdl` (str)
-- `own{truck,tract,trail,coach,...}` (owned equipment counts)
-- `trm{truck,tract,...}` (term-leased), `trp{truck,...}` (trip-leased)
-
-### Operations
-- `carrier_operation` (str), `operation_classifications` (list)
-- `carship` (list: Carrier/Broker/Shipper), `hm_ind` (hazmat Y/N)
-- `interstate_beyond/within_100_miles`, `intrastate_beyond/within_100_miles`
-
-### Safety
-- `safety_rating`, `safety_rating_date`, `review_type`, `review_date`, `review_id`
-- `recordable_crash_rate`, `mcsipstep`, `mcsipdate`
-
-### Cargo Types (30 fields, "X" if carried)
-- `crgo_genfreight` through `crgo_cargoothr` + `crgo_cargoothr_desc`
-- `cargo_carried` (list: summary)
-
-### Other
-- `company_officers` (list of str), `prior_revoke_flag/dot_number`
-- `created_at`, `updated_at`
-
-## Rate Limiting
-- Use `Retry-After` header, exponential backoff
-- Cache responses (5 min TTL recommended)
-- Max ~3 requests/second recommended
-- Implement request queue for high-volume apps
-
-## Still Missing (from API Reference)
-
-### Risk Factors
-- `GET Risk Factors` - 404 on all tested patterns. May be:
-  - Different API version
-  - Tier-gated (returns 404 instead of 403?)
-  - Different route naming
-
-### Vetting Engine
-- `GET Company Vetting Report` - 404 on all tested patterns
-
-### Other Missing
-- `GET Insurances` (company/{dot}/insurances works but returned empty)
-- `GET Service Areas` - not found
-- `GET Company Physical Geo Location` - not found
-- `GET Inspection Details` (by inspection_id) - not found
-- Remaining "+3 more" under Company Details
-- Remaining "+4 more" under Company Details (7 total, found 7 including watch)
-
-## Questions for Garret
-1. What are the exact routes for risk-factors and vetting-report?
-2. Are these tier-gated? What error does a free account get?
-3. Service Areas and Geo Location endpoints - what are the paths?
-4. Inspection Details by inspection_id - what's the route?
-5. DELETE /company/{dot}/watch - confirm route
-6. What file_format values does export accept? (json, csv, xlsx?)
-7. Full list of Company Watches endpoints (3 listed in docs)
+- [SearchCarriers public API documentation](https://searchcarriers.com/docs/api)
+- [SearchCarriers 1.31.0 release notes](https://searchcarriers.com/changelog/1.31.0)
+- [SearchCarriers terms of service](https://searchcarriers.com/terms-of-service)
+- [SearchCarriers product overview](https://searchcarriers.com/lander)

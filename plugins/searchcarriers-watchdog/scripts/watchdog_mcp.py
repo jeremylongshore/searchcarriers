@@ -6,7 +6,7 @@ STANDALONE monitoring plugin (not part of the stackable pipeline):
 
 Four tools:
   - manage_watchlist  : add / remove / list watched carriers
-  - get_alerts        : fetch and categorize recent change alerts
+  - get_alerts        : compatibility response explaining alert API availability
   - route_alert       : format an alert as a channel-ready payload (Slack, Telegram, email, webhook)
   - monitor_compliance: check a carrier against federal compliance standards
 
@@ -29,8 +29,6 @@ _PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
-
 # ---------------------------------------------------------------------------
 # MCP SDK
 # ---------------------------------------------------------------------------
@@ -38,12 +36,16 @@ from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
+from plugins.shared.api_contract import API_V3_BASE, normalize_v3_company  # noqa: E402
+from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 API_BASE = "https://searchcarriers.com/api/v1"
+SEARCH_BASE = API_V3_BASE
 REQUEST_TIMEOUT = 20.0  # seconds
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # Federal insurance minimums (USD)
 INSURANCE_MIN_GENERAL = 750_000
@@ -276,12 +278,7 @@ def _watchlist_entry_name(entry: dict[str, Any]) -> str:
 
 def _watchlist_entry_dot(entry: dict[str, Any]) -> str:
     """Extract the DOT number from a watch list entry."""
-    return str(
-        entry.get("dotNumber")
-        or entry.get("dot_number")
-        or entry.get("dot")
-        or ""
-    )
+    return str(entry.get("dotNumber") or entry.get("dot_number") or entry.get("dot") or "")
 
 
 def _categorize_alert(alert: dict[str, Any]) -> str:
@@ -326,9 +323,9 @@ def _categorize_alert(alert: dict[str, Any]) -> str:
 async def _manage_watchlist(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     """Add, remove, or list watched carriers.
 
-    - add:    POST /carrier-watch with the DOT number.
-    - remove: GET watch list, find entry by DOT, DELETE by id.
-    - list:   GET /carrier-watch and return all watched carriers.
+    SearchCarriers v1 exposes a collection GET and a company-scoped GET/POST.
+    Removal is expressed by syncing an empty ``watch_types`` list; there is no
+    documented DELETE endpoint.
     """
     action: str = str(arguments.get("action", "")).strip().lower()
     dot_number: str = str(arguments.get("dot_number", "")).strip()
@@ -344,12 +341,11 @@ async def _manage_watchlist(arguments: dict[str, Any], api_key: str) -> dict[str
             f"dot_number is required for action='{action}'.",
         )
 
-    watchlist_url = f"{API_BASE}/carrier-watch"
+    watch_types = arguments.get("watch_types") or ["all"]
+    watchlist_url = f"{API_BASE}/company/watch"
+    company_watch_url = f"{API_BASE}/company/{dot_number}/watch"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         if action == "list":
             try:
                 raw = await _get(client, watchlist_url)
@@ -377,7 +373,7 @@ async def _manage_watchlist(arguments: dict[str, Any], api_key: str) -> dict[str
 
         if action == "add":
             try:
-                result = await _post(client, watchlist_url, {"dotNumber": dot_number})
+                result = await _post(client, company_watch_url, {"watch_types": watch_types})
             except RuntimeError as exc:
                 return _error_payload("api_error", str(exc))
 
@@ -405,40 +401,23 @@ async def _manage_watchlist(arguments: dict[str, Any], api_key: str) -> dict[str
                 "_pipeline": _pipeline_meta("manage_watchlist", dot_number),
             }
 
-        # action == "remove"
+        # action == "remove": synchronize the company to zero watch types.
         try:
-            raw_list = await _get(client, watchlist_url)
-        except RuntimeError as exc:
-            return _error_payload("api_error", f"Failed to fetch watch list: {exc}")
-
-        entries = _extract_list(raw_list)
-        target = next(
-            (e for e in entries if _watchlist_entry_dot(e) == dot_number),
-            None,
-        )
-        if target is None:
-            return _error_payload(
-                "not_found",
-                f"DOT {dot_number} is not on the watch list.",
-            )
-
-        entry_id = target.get("id")
-        if not entry_id:
-            return _error_payload(
-                "missing_id",
-                "Watch list entry does not have an id field; cannot delete.",
-            )
-
-        try:
-            await _delete(client, f"{watchlist_url}/{entry_id}")
+            result = await _post(client, company_watch_url, {"watch_types": []})
         except RuntimeError as exc:
             return _error_payload("api_error", str(exc))
 
-        remaining = len(entries) - 1
+        carrier_name = (
+            result.get("carrierName") or result.get("carrier_name") or result.get("legalName") or ""
+        )
+        try:
+            remaining = len(_extract_list(await _get(client, watchlist_url)))
+        except RuntimeError:
+            remaining = -1
         return {
             "action": "remove",
             "dot_number": dot_number,
-            "carrier_name": _watchlist_entry_name(target),
+            "carrier_name": carrier_name,
             "watchlist_count": remaining,
             "result": "removed",
             "carriers": [],
@@ -447,75 +426,34 @@ async def _manage_watchlist(arguments: dict[str, Any], api_key: str) -> dict[str
 
 
 async def _get_alerts(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
-    """Fetch recent watch list alerts and categorize them by type.
-
-    Optional filters:
-      - dot_number: restrict to alerts for one carrier
-      - since: ISO date string; only include alerts after this timestamp
-      - limit: max alerts to return (default 50)
-    """
-    dot_number: str = str(arguments.get("dot_number") or "").strip()
-    since_raw: str = str(arguments.get("since") or "").strip()
-    limit: int = int(arguments.get("limit") or 50)
-
-    alerts_url = f"{API_BASE}/carrier-watch/alerts"
-    params: dict[str, Any] = {"limit": limit}
-    if dot_number:
-        params["dotNumber"] = dot_number
-    if since_raw:
-        params["since"] = since_raw
-
-    since_dt = _parse_date(since_raw) if since_raw else None
-
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        try:
-            raw = await _get(client, alerts_url, params=params)
-        except RuntimeError as exc:
-            return _error_payload("api_error", str(exc))
-
-    all_alerts = _extract_list(raw)
-
-    # Client-side date filter (in case the API ignores the param).
-    if since_dt is not None:
-        filtered: list[dict[str, Any]] = []
-        for alert in all_alerts:
-            ts_raw = (
-                alert.get("timestamp")
-                or alert.get("created_at")
-                or alert.get("alertDate")
-                or alert.get("alert_date")
-            )
-            alert_dt = _parse_date(str(ts_raw)) if ts_raw else None
-            if alert_dt is None or alert_dt >= since_dt:
-                filtered.append(alert)
-        all_alerts = filtered
-
-    # Annotate each alert with its category and build summary counts.
-    categories: dict[str, int] = {c: 0 for c in ALERT_CATEGORIES}
-    for alert in all_alerts:
-        category = _categorize_alert(alert)
-        alert["_category"] = category
-        categories[category] = categories.get(category, 0) + 1
-
-    return {
-        "alert_count": len(all_alerts),
-        "alerts": all_alerts[:limit],
-        "categories": categories,
-        "_pipeline": _pipeline_meta("get_alerts", dot_number),
-    }
+    """Return a truthful compatibility error for the removed assumed route."""
+    del arguments, api_key
+    return _error_payload(
+        "endpoint_unavailable",
+        "SearchCarriers' published API does not expose an alert-feed endpoint. "
+        "Use manage_watchlist to configure watches, then consume notifications "
+        "through the delivery channel configured in SearchCarriers.",
+        {
+            "deprecated_assumption": "/api/v1/carrier-watch/alerts",
+            "documented_routes": [
+                "GET /api/v1/company/watch",
+                "GET /api/v1/company/{dotNumber}/watch",
+                "POST /api/v1/company/{dotNumber}/watch",
+            ],
+        },
+    )
 
 
 def _format_slack(alert: dict[str, Any], destination: str) -> dict[str, Any]:
     """Return a Slack Block Kit JSON payload ready to POST to a webhook."""
     category = alert.get("_category") or _categorize_alert(alert)
     dot = str(alert.get("dotNumber") or alert.get("dot_number") or "N/A")
-    carrier = str(
-        alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier"
-    )
+    carrier = str(alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier")
     summary = str(
-        alert.get("summary") or alert.get("message") or alert.get("description") or "Alert details not available."
+        alert.get("summary")
+        or alert.get("message")
+        or alert.get("description")
+        or "Alert details not available."
     )
     ts = str(alert.get("timestamp") or alert.get("created_at") or alert.get("alertDate") or "")
     severity = str(alert.get("severity") or "info").lower()
@@ -545,7 +483,10 @@ def _format_slack(alert: dict[str, Any], destination: str) -> dict[str, Any]:
                 "fields": [
                     {"type": "mrkdwn", "text": f"*Carrier:*\n{carrier}"},
                     {"type": "mrkdwn", "text": f"*DOT:*\n{dot}"},
-                    {"type": "mrkdwn", "text": f"*Category:*\n{category.replace('_', ' ').title()}"},
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Category:*\n{category.replace('_', ' ').title()}",
+                    },
                     {"type": "mrkdwn", "text": f"*Severity:*\n{severity.capitalize()}"},
                 ],
             },
@@ -556,7 +497,10 @@ def _format_slack(alert: dict[str, Any], destination: str) -> dict[str, Any]:
             {
                 "type": "context",
                 "elements": [
-                    {"type": "mrkdwn", "text": f"Timestamp: {ts}" if ts else "SearchCarriers Watchdog"},
+                    {
+                        "type": "mrkdwn",
+                        "text": f"Timestamp: {ts}" if ts else "SearchCarriers Watchdog",
+                    },
                 ],
             },
         ],
@@ -567,16 +511,19 @@ def _format_telegram(alert: dict[str, Any], destination: str) -> dict[str, Any]:
     """Return a Telegram sendMessage body with Markdown formatting."""
     category = alert.get("_category") or _categorize_alert(alert)
     dot = str(alert.get("dotNumber") or alert.get("dot_number") or "N/A")
-    carrier = str(
-        alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier"
-    )
+    carrier = str(alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier")
     summary = str(
-        alert.get("summary") or alert.get("message") or alert.get("description") or "Alert details not available."
+        alert.get("summary")
+        or alert.get("message")
+        or alert.get("description")
+        or "Alert details not available."
     )
     ts = str(alert.get("timestamp") or alert.get("created_at") or alert.get("alertDate") or "")
     severity = str(alert.get("severity") or "info").lower()
 
-    severity_prefix = {"critical": "CRITICAL", "warning": "WARNING", "info": "INFO"}.get(severity, "INFO")
+    severity_prefix = {"critical": "CRITICAL", "warning": "WARNING", "info": "INFO"}.get(
+        severity, "INFO"
+    )
 
     lines = [
         f"*[{severity_prefix}] Carrier Alert*",
@@ -602,11 +549,12 @@ def _format_email(alert: dict[str, Any], destination: str) -> dict[str, Any]:
     """Return a structured email payload with subject and HTML body."""
     category = alert.get("_category") or _categorize_alert(alert)
     dot = str(alert.get("dotNumber") or alert.get("dot_number") or "N/A")
-    carrier = str(
-        alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier"
-    )
+    carrier = str(alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier")
     summary = str(
-        alert.get("summary") or alert.get("message") or alert.get("description") or "Alert details not available."
+        alert.get("summary")
+        or alert.get("message")
+        or alert.get("description")
+        or "Alert details not available."
     )
     ts = str(alert.get("timestamp") or alert.get("created_at") or alert.get("alertDate") or "")
     severity = str(alert.get("severity") or "info").lower()
@@ -620,13 +568,13 @@ def _format_email(alert: dict[str, Any], destination: str) -> dict[str, Any]:
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <div style="background-color: {color}; padding: 16px; border-radius: 4px 4px 0 0;">
-    <h2 style="color: white; margin: 0;">Carrier Alert: {category.replace('_', ' ').title()}</h2>
+    <h2 style="color: white; margin: 0;">Carrier Alert: {category.replace("_", " ").title()}</h2>
   </div>
   <div style="border: 1px solid #e0e0e0; border-top: none; padding: 16px; border-radius: 0 0 4px 4px;">
     <table style="width: 100%; border-collapse: collapse;">
       <tr><td style="padding: 6px; font-weight: bold; width: 120px;">Carrier</td><td style="padding: 6px;">{carrier}</td></tr>
       <tr style="background: #f8f8f8;"><td style="padding: 6px; font-weight: bold;">DOT Number</td><td style="padding: 6px;">{dot}</td></tr>
-      <tr><td style="padding: 6px; font-weight: bold;">Alert Type</td><td style="padding: 6px;">{category.replace('_', ' ').title()}</td></tr>
+      <tr><td style="padding: 6px; font-weight: bold;">Alert Type</td><td style="padding: 6px;">{category.replace("_", " ").title()}</td></tr>
       <tr style="background: #f8f8f8;"><td style="padding: 6px; font-weight: bold;">Severity</td><td style="padding: 6px;">{severity.capitalize()}</td></tr>
     </table>
     <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 16px 0;">
@@ -650,8 +598,7 @@ def _format_email(alert: dict[str, Any], destination: str) -> dict[str, Any]:
             f"DOT: {dot}\n"
             f"Alert Type: {category.replace('_', ' ').title()}\n"
             f"Severity: {severity.capitalize()}\n\n"
-            f"Details: {summary}\n"
-            + (f"\nTimestamp: {ts}\n" if ts else "")
+            f"Details: {summary}\n" + (f"\nTimestamp: {ts}\n" if ts else "")
         ),
     }
 
@@ -660,12 +607,8 @@ def _format_webhook(alert: dict[str, Any], destination: str) -> dict[str, Any]:
     """Return a generic JSON POST body for webhook delivery."""
     category = alert.get("_category") or _categorize_alert(alert)
     dot = str(alert.get("dotNumber") or alert.get("dot_number") or "N/A")
-    carrier = str(
-        alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier"
-    )
-    summary = str(
-        alert.get("summary") or alert.get("message") or alert.get("description") or ""
-    )
+    carrier = str(alert.get("carrierName") or alert.get("carrier_name") or "Unknown Carrier")
+    summary = str(alert.get("summary") or alert.get("message") or alert.get("description") or "")
     ts = str(alert.get("timestamp") or alert.get("created_at") or alert.get("alertDate") or "")
     severity = str(alert.get("severity") or "info").lower()
 
@@ -743,12 +686,10 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
     if not dot:
         return _error_payload("missing_parameter", "dot_number is required.")
 
-    search_url = f"{API_BASE}/search"
+    search_url = f"{SEARCH_BASE}/search"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task = _get(client, search_url, params={"dotNumber": dot})
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        search_task = _get(client, search_url, params={"dotNumber": dot, "perPage": 1})
         authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
         insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
@@ -764,7 +705,7 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
     if isinstance(insurances_result, Exception):
         insurances_result = {}  # Non-fatal; we check below.
 
-    carrier = _extract_carrier(search_result)
+    carrier = normalize_v3_company(_extract_carrier(search_result))
     carrier_name = _carrier_name(carrier)
 
     authorities_list = _extract_list(authorities_result)
@@ -797,8 +738,10 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
 
     # 1. Operating authority active.
     active_authorities = [
-        a for a in authorities_list
-        if str(a.get("status") or a.get("authorityStatus") or "").lower() in ("active", "authorized")
+        a
+        for a in authorities_list
+        if str(a.get("status") or a.get("authorityStatus") or "").lower()
+        in ("active", "authorized")
     ]
     has_active_authority = len(active_authorities) > 0
     _check(
@@ -811,8 +754,10 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
 
     # 2. No revoked authorities.
     revoked_authorities = [
-        a for a in authorities_list
-        if str(a.get("status") or a.get("authorityStatus") or "").lower() in ("revoked", "inactive", "revocated")
+        a
+        for a in authorities_list
+        if str(a.get("status") or a.get("authorityStatus") or "").lower()
+        in ("revoked", "inactive", "revocated")
     ]
     has_revoked = len(revoked_authorities) > 0
     _check(
@@ -825,10 +770,7 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
 
     # 3. No Unsatisfactory safety rating.
     safety_rating = str(
-        carrier.get("safetyRating")
-        or carrier.get("safety_rating")
-        or carrier.get("rating")
-        or ""
+        carrier.get("safetyRating") or carrier.get("safety_rating") or carrier.get("rating") or ""
     ).lower()
     is_unsatisfactory = safety_rating in ("unsatisfactory", "unsat", "u")
     _check(
@@ -836,12 +778,13 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
         not is_unsatisfactory,
         "critical",
         f"Safety rating is '{safety_rating or 'not rated'}' — not Unsatisfactory.",
-        f"Safety rating is Unsatisfactory — carrier has a critical safety deficiency.",
+        "Safety rating is Unsatisfactory — carrier has a critical safety deficiency.",
     )
 
     # 4. Insurance coverage — general freight minimum ($750k).
     general_policies = [
-        p for p in insurances_list
+        p
+        for p in insurances_list
         if str(p.get("insuranceType") or p.get("insurance_type") or p.get("type") or "").lower()
         not in ("hazmat", "hm-126")
     ]
@@ -864,7 +807,8 @@ async def _monitor_compliance(arguments: dict[str, Any], api_key: str) -> dict[s
 
     # 5. Insurance coverage — hazmat minimum ($5M) — only if carrier hauls hazmat.
     hazmat_policies = [
-        p for p in insurances_list
+        p
+        for p in insurances_list
         if str(p.get("insuranceType") or p.get("insurance_type") or p.get("type") or "").lower()
         in ("hazmat", "hm-126", "hazardous")
     ]
@@ -964,8 +908,15 @@ _TOOL_DEFINITIONS: list[Tool] = [
                 "dot_number": {
                     "type": "string",
                     "description": (
-                        "The carrier's USDOT number. Required for action='add' "
-                        "and action='remove'."
+                        "The carrier's USDOT number. Required for action='add' and action='remove'."
+                    ),
+                },
+                "watch_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Watch categories to synchronize when adding. Defaults "
+                        "to ['all']; examples include details and inspections."
                     ),
                 },
             },
@@ -975,10 +926,9 @@ _TOOL_DEFINITIONS: list[Tool] = [
     Tool(
         name="get_alerts",
         description=(
-            "Fetch recent carrier alerts from the watch list and categorize them "
-            "by type: safety_change, insurance_change, authority_change, "
-            "mcs150_update, or status_change. Optionally filter by a single "
-            "carrier's DOT number, an ISO date cutoff, or a result limit. "
+            "Compatibility tool for older clients. The published SearchCarriers "
+            "API does not expose an alert-feed route, so this returns a structured "
+            "endpoint_unavailable response with the documented watch routes. "
             "Min tier: proplus."
         ),
         inputSchema={

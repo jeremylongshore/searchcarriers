@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-carrier-intel
-description: >-
-  Interprets carrier data from the carrier-intel MCP tools and provides
-  freight industry context. Use when processing carrier lookup results.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Interprets carrier data from the carrier-intel MCP tools and provides freight industry context. Use when processing carrier lookup results.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: free
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- plugin
 ---
 
 # Carrier Intel — Embedded Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This skill provides the intelligence layer for the carrier-intel plugin. It teaches you how to interpret raw data returned by the four MCP tools (`carrier_lookup`, `carrier_profile`, `entity_map`, `fleet_summary`), apply freight industry context, detect red flags, and format output for both human consumption and downstream pipeline stages.
 
@@ -30,7 +35,7 @@ The carrier-intel plugin sits at the INPUT stage of the pipeline. Data it produc
 
 ### Interpreting carrier_lookup Results
 
-The `carrier_lookup` tool returns an array of carrier objects. Each carrier has 143 fields. Key interpretation rules:
+The `carrier_lookup` tool returns an array of carrier objects. Each v3 company response contains the selected nested sections. Key interpretation rules:
 
 **Status Codes**
 
@@ -201,6 +206,10 @@ After a carrier_profile call, prepare the pipeline output:
 4. If entity_map was also called, include relationships
 5. Validate all required keys are present
 6. Pass structured object to Risk Engine
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

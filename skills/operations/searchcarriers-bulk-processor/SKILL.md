@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-bulk-processor
-description: >-
-  Batch processes carrier lookups from CSV or DOT lists with rate limiting
-  and progress reporting. Use when bulk looking up or mass vetting carriers.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Batch processes carrier lookups from CSV or DOT lists with rate limiting and progress reporting. Use when bulk looking up or mass vetting carriers.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: smb
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- operations
 ---
 
 # Bulk Processor
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 Operations teams routinely need to vet, audit, or refresh data on dozens to hundreds of carriers at once -- new broker onboarding lists, quarterly compliance reviews, lane bid respondents, or load board lead qualification. Doing this one DOT at a time is not viable. This skill teaches you how to accept bulk carrier input (CSV files, inline lists, or piped data), batch those lookups through the SearchCarriers `/export` endpoint with proper rate limiting, handle per-carrier errors without failing the entire batch, and deliver structured output with summary statistics.
 
@@ -313,6 +318,10 @@ Small lists (under 20) can be handled in a single API call. Format results as a 
 3. Filter results where `operating_status` is not ACTIVE.
 4. Check for carriers with zero insurance on file.
 5. Present a dedicated "Flagged Carriers" table with the specific concern for each.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

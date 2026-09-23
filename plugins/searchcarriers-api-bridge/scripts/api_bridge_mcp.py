@@ -34,8 +34,6 @@ _PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
-
 # ---------------------------------------------------------------------------
 # MCP SDK
 # ---------------------------------------------------------------------------
@@ -43,12 +41,21 @@ from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
+from plugins.shared.api_contract import (  # noqa: E402
+    API_V1_BASE,
+    API_V2_BASE,
+    API_V3_BASE,
+    normalize_v3_company,
+)
+from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-API_BASE = "https://searchcarriers.com/api/v1"
+API_BASE = API_V1_BASE
+SEARCH_BASE = API_V3_BASE
 REQUEST_TIMEOUT = 20.0  # seconds
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 BULK_BATCH_SIZE = 10
 BULK_MAX_DOT_NUMBERS = 100
@@ -59,12 +66,15 @@ WEBHOOK_CONFIG_PATH = Path.home() / ".searchcarriers" / "webhooks.json"
 # Endpoints probed by api_health.
 # Company-scoped endpoints use DOT 1 as a probe target; a 404 is treated as healthy.
 HEALTH_ENDPOINTS: list[dict[str, str]] = [
-    {"name": "search",        "url": "/search",              "probe_params": "dotNumber=1"},
-    {"name": "authorities",   "url": "/company/1/authorities","probe_params": ""},
-    {"name": "insurances",    "url": "/company/1/insurances", "probe_params": ""},
-    {"name": "equipment",     "url": "/company/1/equipment",  "probe_params": ""},
-    {"name": "carrier_watch", "url": "/carrier-watch",        "probe_params": ""},
-    {"name": "alerts",        "url": "/carrier-watch/alerts", "probe_params": ""},
+    {"name": "v3_search", "url": f"{API_V3_BASE}/search", "probe_params": "dotNumber=1"},
+    {"name": "v3_company", "url": f"{API_V3_BASE}/company/1", "probe_params": ""},
+    {"name": "v3_equipment", "url": f"{API_V3_BASE}/company/1/equipment", "probe_params": ""},
+    {
+        "name": "v2_qualification",
+        "url": f"{API_V2_BASE}/company/1/qualification-reports",
+        "probe_params": "",
+    },
+    {"name": "v1_watches", "url": f"{API_V1_BASE}/company/watch", "probe_params": ""},
 ]
 
 # Supported data sections for bulk_lookup.
@@ -75,82 +85,82 @@ VALID_TMS_FORMATS = {"generic", "mcleod", "tms_international", "dat_power"}
 
 # Generic TMS field mapping: SearchCarriers field -> generic TMS field.
 GENERIC_FIELD_MAP: dict[str, str] = {
-    "dotNumber":       "carrier_dot",
-    "dot_number":      "carrier_dot",
-    "mcNumber":        "carrier_mc",
-    "mc_number":       "carrier_mc",
-    "legalName":       "carrier_name",
-    "legal_name":      "carrier_name",
-    "dbaName":         "carrier_dba",
-    "dba_name":        "carrier_dba",
-    "address":         "address_street",
-    "city":            "address_city",
-    "state":           "address_state",
-    "zip":             "address_zip",
-    "phone":           "phone",
-    "email":           "email",
-    "safetyRating":    "safety_rating",
-    "safety_rating":   "safety_rating",
+    "dotNumber": "carrier_dot",
+    "dot_number": "carrier_dot",
+    "mcNumber": "carrier_mc",
+    "mc_number": "carrier_mc",
+    "legalName": "carrier_name",
+    "legal_name": "carrier_name",
+    "dbaName": "carrier_dba",
+    "dba_name": "carrier_dba",
+    "address": "address_street",
+    "city": "address_city",
+    "state": "address_state",
+    "zip": "address_zip",
+    "phone": "phone",
+    "email": "email",
+    "safetyRating": "safety_rating",
+    "safety_rating": "safety_rating",
     "operatingStatus": "operating_status",
-    "operating_status":"operating_status",
-    "entityType":      "entity_type",
-    "entity_type":     "entity_type",
-    "powerUnits":      "power_units",
-    "power_units":     "power_units",
-    "drivers":         "driver_count",
-    "mcs150Date":      "mcs150_date",
-    "mcs_150_date":    "mcs150_date",
+    "operating_status": "operating_status",
+    "entityType": "entity_type",
+    "entity_type": "entity_type",
+    "powerUnits": "power_units",
+    "power_units": "power_units",
+    "drivers": "driver_count",
+    "mcs150Date": "mcs150_date",
+    "mcs_150_date": "mcs150_date",
 }
 
 # TMS-specific field mapping guides (SearchCarriers field -> TMS field).
 TMS_FIELD_GUIDES: dict[str, dict[str, str]] = {
     "mcleod": {
-        "carrier_dot":      "CARRIER_ID",
-        "carrier_mc":       "MC_NUM",
-        "carrier_name":     "NAME",
-        "carrier_dba":      "DBA_NAME",
-        "address_street":   "ADDRESS1",
-        "address_city":     "CITY",
-        "address_state":    "STATE",
-        "address_zip":      "ZIP",
-        "phone":            "PHONE",
-        "safety_rating":    "SAFETY_RATING",
+        "carrier_dot": "CARRIER_ID",
+        "carrier_mc": "MC_NUM",
+        "carrier_name": "NAME",
+        "carrier_dba": "DBA_NAME",
+        "address_street": "ADDRESS1",
+        "address_city": "CITY",
+        "address_state": "STATE",
+        "address_zip": "ZIP",
+        "phone": "PHONE",
+        "safety_rating": "SAFETY_RATING",
         "operating_status": "STATUS",
-        "power_units":      "EQUIP_COUNT",
-        "driver_count":     "DRIVER_COUNT",
-        "mcs150_date":      "MCS150_DATE",
+        "power_units": "EQUIP_COUNT",
+        "driver_count": "DRIVER_COUNT",
+        "mcs150_date": "MCS150_DATE",
     },
     "tms_international": {
-        "carrier_dot":      "DotNumber",
-        "carrier_mc":       "McNumber",
-        "carrier_name":     "LegalName",
-        "carrier_dba":      "DbaName",
-        "address_street":   "StreetAddress",
-        "address_city":     "City",
-        "address_state":    "StateCode",
-        "address_zip":      "PostalCode",
-        "phone":            "PhoneNumber",
-        "safety_rating":    "SafetyRating",
+        "carrier_dot": "DotNumber",
+        "carrier_mc": "McNumber",
+        "carrier_name": "LegalName",
+        "carrier_dba": "DbaName",
+        "address_street": "StreetAddress",
+        "address_city": "City",
+        "address_state": "StateCode",
+        "address_zip": "PostalCode",
+        "phone": "PhoneNumber",
+        "safety_rating": "SafetyRating",
         "operating_status": "OperatingStatus",
-        "power_units":      "NumberOfPowerUnits",
-        "driver_count":     "NumberOfDrivers",
-        "mcs150_date":      "Mcs150FormDate",
+        "power_units": "NumberOfPowerUnits",
+        "driver_count": "NumberOfDrivers",
+        "mcs150_date": "Mcs150FormDate",
     },
     "dat_power": {
-        "carrier_dot":      "dot_num",
-        "carrier_mc":       "mc_num",
-        "carrier_name":     "legal_name",
-        "carrier_dba":      "dba_name",
-        "address_street":   "phys_addr",
-        "address_city":     "phys_city",
-        "address_state":    "phys_state",
-        "address_zip":      "phys_zip",
-        "phone":            "phone_num",
-        "safety_rating":    "safety_rtg",
+        "carrier_dot": "dot_num",
+        "carrier_mc": "mc_num",
+        "carrier_name": "legal_name",
+        "carrier_dba": "dba_name",
+        "address_street": "phys_addr",
+        "address_city": "phys_city",
+        "address_state": "phys_state",
+        "address_zip": "phys_zip",
+        "phone": "phone_num",
+        "safety_rating": "safety_rtg",
         "operating_status": "op_status",
-        "power_units":      "pwr_units",
-        "driver_count":     "num_drivers",
-        "mcs150_date":      "mcs150_dt",
+        "power_units": "pwr_units",
+        "driver_count": "num_drivers",
+        "mcs150_date": "mcs150_dt",
     },
 }
 
@@ -236,6 +246,7 @@ async def _get(
 
 def _extract_rate_limit(headers: httpx.Headers) -> dict[str, int | None]:
     """Parse X-RateLimit-* headers into a dict."""
+
     def _int_or_none(value: str | None) -> int | None:
         try:
             return int(value) if value is not None else None
@@ -244,7 +255,7 @@ def _extract_rate_limit(headers: httpx.Headers) -> dict[str, int | None]:
 
     return {
         "remaining": _int_or_none(headers.get("X-RateLimit-Remaining")),
-        "limit":     _int_or_none(headers.get("X-RateLimit-Limit")),
+        "limit": _int_or_none(headers.get("X-RateLimit-Limit")),
     }
 
 
@@ -283,7 +294,7 @@ async def _probe_endpoint(
     probe_params: str,
 ) -> dict[str, Any]:
     """Probe a single endpoint and return its health record."""
-    full_url = f"{API_BASE}{path}"
+    full_url = path if path.startswith("https://") else f"{API_BASE}{path}"
     params: dict[str, str] = {}
     if probe_params:
         for pair in probe_params.split("&"):
@@ -321,12 +332,12 @@ async def _probe_endpoint(
         endpoint_status = "down"
 
     return {
-        "name":        name,
-        "url":         path,
-        "status":      http_status,
-        "health":      endpoint_status,
+        "name": name,
+        "url": path,
+        "status": http_status,
+        "health": endpoint_status,
         "response_ms": elapsed_ms,
-        "rate_limit":  rate_limit,
+        "rate_limit": rate_limit,
     }
 
 
@@ -355,9 +366,7 @@ async def _api_health(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     else:
         endpoints_to_probe = HEALTH_ENDPOINTS
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         tasks = [
             _probe_endpoint(client, ep["name"], ep["url"], ep["probe_params"])
             for ep in endpoints_to_probe
@@ -374,10 +383,10 @@ async def _api_health(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
         overall = "healthy"
 
     return {
-        "status":     overall,
-        "endpoints":  list(results),
+        "status": overall,
+        "endpoints": list(results),
         "checked_at": _now_utc().isoformat(),
-        "_pipeline":  _pipeline_meta("api_health"),
+        "_pipeline": _pipeline_meta("api_health"),
     }
 
 
@@ -397,13 +406,13 @@ async def _fetch_section(
         (section, data_or_none, error_message_or_none)
     """
     if section == "basics":
-        url = f"{API_BASE}/search"
-        params: dict[str, str] | None = {"dotNumber": dot}
+        url = f"{API_V3_BASE}/search"
+        params: dict[str, str] | None = {"dotNumber": dot, "perPage": "1"}
     else:
         section_path = {
             "authorities": "authorities",
-            "insurances":  "insurances",
-            "equipment":   "equipment",
+            "insurances": "insurances",
+            "equipment": "equipment",
         }[section]
         url = f"{API_BASE}/company/{dot}/{section_path}"
         params = None
@@ -411,7 +420,7 @@ async def _fetch_section(
     try:
         data, _ = await _get(client, url, params=params)
         if section == "basics":
-            return section, _extract_carrier(data), None
+            return section, normalize_v3_company(_extract_carrier(data)), None
         return section, _extract_list(data), None
     except RuntimeError as exc:
         return section, None, str(exc)
@@ -441,9 +450,9 @@ async def _lookup_single(
 
     return {
         "dot_number": dot,
-        "data":       carrier_data,
-        "errors":     errors,
-        "success":    len(errors) == 0,
+        "data": carrier_data,
+        "errors": errors,
+        "success": len(errors) == 0,
     }
 
 
@@ -481,9 +490,7 @@ async def _bulk_lookup(arguments: dict[str, Any], api_key: str) -> dict[str, Any
     all_errors: list[dict[str, str]] = []
 
     # Process in batches of BULK_BATCH_SIZE to respect API rate limits.
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         for batch_start in range(0, len(dot_numbers), BULK_BATCH_SIZE):
             batch = dot_numbers[batch_start : batch_start + BULK_BATCH_SIZE]
             batch_tasks = [_lookup_single(client, dot, include) for dot in batch]
@@ -505,13 +512,13 @@ async def _bulk_lookup(arguments: dict[str, Any], api_key: str) -> dict[str, Any
     failed = len(dot_numbers) - succeeded
 
     return {
-        "total":              len(dot_numbers),
-        "succeeded":          succeeded,
-        "failed":             failed,
-        "results":            all_results,
-        "errors":             all_errors,
-        "processing_time_s":  processing_time,
-        "_pipeline":          _pipeline_meta("bulk_lookup", f"{len(dot_numbers)} DOTs"),
+        "total": len(dot_numbers),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": all_results,
+        "errors": all_errors,
+        "processing_time_s": processing_time,
+        "_pipeline": _pipeline_meta("bulk_lookup", f"{len(dot_numbers)} DOTs"),
     }
 
 
@@ -629,26 +636,31 @@ async def _tms_sync(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
             )
         result = _map_import_to_searchcarriers(tms_record, tms_format)
         return {
-            "direction":      "import",
-            "tms_format":     tms_format,
-            "dot_number":     dot,
-            "carrier_data":   result["mapped"],
-            "field_mapping":  _build_tms_specific_guide(tms_format),
+            "direction": "import",
+            "tms_format": tms_format,
+            "dot_number": dot,
+            "carrier_data": result["mapped"],
+            "field_mapping": _build_tms_specific_guide(tms_format),
             "unmapped_fields": result["unmapped"],
-            "_pipeline":      _pipeline_meta("tms_sync", f"import:{dot}"),
+            "_pipeline": _pipeline_meta("tms_sync", f"import:{dot}"),
         }
 
     # direction == "export": fetch carrier data from API.
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task      = _get(client, f"{API_BASE}/search",                     {"dotNumber": dot})
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        search_task = _get(
+            client,
+            f"{API_V3_BASE}/search",
+            {"dotNumber": dot, "perPage": "1"},
+        )
         authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
-        insurances_task  = _get(client, f"{API_BASE}/company/{dot}/insurances")
-        equipment_task   = _get(client, f"{API_BASE}/company/{dot}/equipment")
+        insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
+        equipment_task = _get(client, f"{API_BASE}/company/{dot}/equipment")
 
         raw_results = await asyncio.gather(
-            search_task, authorities_task, insurances_task, equipment_task,
+            search_task,
+            authorities_task,
+            insurances_task,
+            equipment_task,
             return_exceptions=True,
         )
 
@@ -657,13 +669,15 @@ async def _tms_sync(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
     if isinstance(search_data, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_data}")
 
-    carrier = _extract_carrier(search_data[0])
+    carrier = normalize_v3_company(_extract_carrier(search_data[0]))
 
     # Merge authority / insurance / equipment summaries into carrier dict.
     if not isinstance(auth_data, Exception):
         auth_list = _extract_list(auth_data[0])
         carrier["_authorities"] = auth_list
-        active = [a for a in auth_list if str(a.get("status") or "").lower() in ("active", "authorized")]
+        active = [
+            a for a in auth_list if str(a.get("status") or "").lower() in ("active", "authorized")
+        ]
         carrier["activeAuthorityCount"] = len(active)
 
     if not isinstance(ins_data, Exception):
@@ -689,13 +703,13 @@ async def _tms_sync(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
         unmapped = _unmapped_fields(carrier)
 
     return {
-        "direction":       "export",
-        "tms_format":      tms_format,
-        "dot_number":      dot,
-        "carrier_data":    formatted_carrier,
-        "field_mapping":   field_mapping,
+        "direction": "export",
+        "tms_format": tms_format,
+        "dot_number": dot,
+        "carrier_data": formatted_carrier,
+        "field_mapping": field_mapping,
         "unmapped_fields": unmapped,
-        "_pipeline":       _pipeline_meta("tms_sync", f"export:{dot}"),
+        "_pipeline": _pipeline_meta("tms_sync", f"export:{dot}"),
     }
 
 
@@ -751,10 +765,10 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
     Returns:
         Structured result with the affected webhook record and total count.
     """
-    action:      str       = str(arguments.get("action", "")).strip().lower()
-    webhook_url: str       = str(arguments.get("webhook_url") or "").strip()
-    webhook_id:  str       = str(arguments.get("webhook_id") or "").strip()
-    events:      list[str] = list(arguments.get("events") or [])
+    action: str = str(arguments.get("action", "")).strip().lower()
+    webhook_url: str = str(arguments.get("webhook_url") or "").strip()
+    webhook_id: str = str(arguments.get("webhook_id") or "").strip()
+    events: list[str] = list(arguments.get("events") or [])
 
     if action not in ("create", "list", "update", "delete"):
         return _error_payload(
@@ -770,11 +784,11 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
     # ------------------------------------------------------------------
     if action == "list":
         return {
-            "action":        "list",
-            "webhook":       None,
-            "webhooks":      webhooks,
+            "action": "list",
+            "webhook": None,
+            "webhooks": webhooks,
             "webhooks_total": len(webhooks),
-            "_pipeline":     _pipeline_meta("webhook_manage", "list"),
+            "_pipeline": _pipeline_meta("webhook_manage", "list"),
         }
 
     # ------------------------------------------------------------------
@@ -786,9 +800,9 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
             return _error_payload("invalid_url", url_error)
 
         new_webhook: dict[str, Any] = {
-            "id":         str(uuid.uuid4()),
-            "url":        webhook_url,
-            "events":     events,
+            "id": str(uuid.uuid4()),
+            "url": webhook_url,
+            "events": events,
             "created_at": _now_utc().isoformat(),
             "updated_at": _now_utc().isoformat(),
         }
@@ -801,10 +815,10 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
             return _error_payload("config_write_error", f"Failed to save webhook config: {exc}")
 
         return {
-            "action":        "create",
-            "webhook":       new_webhook,
+            "action": "create",
+            "webhook": new_webhook,
             "webhooks_total": len(webhooks),
-            "_pipeline":     _pipeline_meta("webhook_manage", new_webhook["id"]),
+            "_pipeline": _pipeline_meta("webhook_manage", new_webhook["id"]),
         }
 
     # ------------------------------------------------------------------
@@ -852,10 +866,10 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
             return _error_payload("config_write_error", f"Failed to save webhook config: {exc}")
 
         return {
-            "action":        "update",
-            "webhook":       webhooks[target_idx],
+            "action": "update",
+            "webhook": webhooks[target_idx],
             "webhooks_total": len(webhooks),
-            "_pipeline":     _pipeline_meta("webhook_manage", webhook_id),
+            "_pipeline": _pipeline_meta("webhook_manage", webhook_id),
         }
 
     # ------------------------------------------------------------------
@@ -870,10 +884,10 @@ async def _webhook_manage(arguments: dict[str, Any], api_key: str) -> dict[str, 
         return _error_payload("config_write_error", f"Failed to save webhook config: {exc}")
 
     return {
-        "action":        "delete",
-        "webhook":       deleted,
+        "action": "delete",
+        "webhook": deleted,
         "webhooks_total": len(webhooks),
-        "_pipeline":     _pipeline_meta("webhook_manage", webhook_id),
+        "_pipeline": _pipeline_meta("webhook_manage", webhook_id),
     }
 
 
@@ -931,10 +945,7 @@ _TOOL_DEFINITIONS: list[Tool] = [
                         "type": "string",
                         "enum": ["basics", "authorities", "insurances", "equipment"],
                     },
-                    "description": (
-                        "Data sections to fetch for each DOT. "
-                        "Defaults to ['basics']."
-                    ),
+                    "description": ("Data sections to fetch for each DOT. Defaults to ['basics']."),
                     "default": ["basics"],
                 },
             },
@@ -1026,9 +1037,9 @@ _TOOL_DEFINITIONS: list[Tool] = [
 ]
 
 _TOOL_HANDLERS = {
-    "api_health":     _api_health,
-    "bulk_lookup":    _bulk_lookup,
-    "tms_sync":       _tms_sync,
+    "api_health": _api_health,
+    "bulk_lookup": _bulk_lookup,
+    "tms_sync": _tms_sync,
     "webhook_manage": _webhook_manage,
 }
 
@@ -1059,10 +1070,10 @@ async def serve() -> None:
                 "tier_insufficient",
                 str(exc),
                 {
-                    "tool":         exc.tool,
+                    "tool": exc.tool,
                     "required_tier": exc.required,
                     "current_tier": exc.current,
-                    "upgrade_url":  "https://searchcarriers.com/pricing",
+                    "upgrade_url": "https://searchcarriers.com/pricing",
                 },
             )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]

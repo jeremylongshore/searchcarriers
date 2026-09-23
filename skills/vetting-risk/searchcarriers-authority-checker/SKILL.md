@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-authority-checker
-description: >-
-  Checks carrier operating authority status, types, and history to determine what a
-  carrier can legally transport. Use when verifying a carrier's authority or investigating revocations.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Checks carrier operating authority status, types, and history to determine what a carrier can legally transport. Use when verifying a carrier's authority or investigating revocations.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: free
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- vetting-risk
 ---
 
 # Authority Checker
@@ -35,15 +38,15 @@ If the user provides a DOT number, proceed to Step 2. Otherwise, resolve the ide
 ```bash
 # Search by MC number
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?mcNumber=1672915"
+  "https://searchcarriers.com/api/v3/search?docketNumber=1672915"
 
 # Search by legal name
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?legalName=SWIFT%20TRANSPORTATION"
+  "https://searchcarriers.com/api/v3/search?superSearchTerm=SWIFT%20TRANSPORTATION"
 
 # Search by DOT number
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber=12345"
+  "https://searchcarriers.com/api/v3/search?dotNumber=12345"
 ```
 
 From the search response, extract `dot_number` and also note these carrier-level fields for later use:
@@ -124,7 +127,7 @@ Authority history reveals the timeline of status changes, which is critical for 
 ```bash
 # Fetch authority history (paginated)
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/authority/{dot}/history?page=1&perPage=50"
+  "https://searchcarriers.com/api/v1/authority/{docketNumber}/history?page=1&perPage=50"
 ```
 
 Analyze the history for these patterns:
@@ -149,35 +152,42 @@ Chameleon carriers are unsafe operators who shut down and reopen under a new DOT
 import json
 from datetime import datetime, timedelta
 
+
 def check_chameleon_risk(carrier, authority):
     risks = []
 
     # Check prior revocation flag
-    if carrier.get('prior_revoke_flag') == 'Y':
-        prev_dot = carrier.get('prior_revoke_dot_number', 'unknown')
-        risks.append({
-            "indicator": "PRIOR_REVOCATION",
-            "severity": "HIGH",
-            "detail": f"Carrier previously operated under DOT {prev_dot} which was revoked"
-        })
+    if carrier.get("prior_revoke_flag") == "Y":
+        prev_dot = carrier.get("prior_revoke_dot_number", "unknown")
+        risks.append(
+            {
+                "indicator": "PRIOR_REVOCATION",
+                "severity": "HIGH",
+                "detail": f"Carrier previously operated under DOT {prev_dot} which was revoked",
+            }
+        )
 
     # Check authority age
-    add_date = datetime.strptime(carrier['add_date'], '%Y-%m-%d')
+    add_date = datetime.strptime(carrier["add_date"], "%Y-%m-%d")
     age_months = (datetime.now() - add_date).days / 30
     if age_months < 18:
-        risks.append({
-            "indicator": "NEW_AUTHORITY",
-            "severity": "MEDIUM",
-            "detail": f"Authority is only {int(age_months)} months old (new entrant)"
-        })
+        risks.append(
+            {
+                "indicator": "NEW_AUTHORITY",
+                "severity": "MEDIUM",
+                "detail": f"Authority is only {int(age_months)} months old (new entrant)",
+            }
+        )
 
     # New authority + prior revocation = strong chameleon signal
-    if age_months < 18 and carrier.get('prior_revoke_flag') == 'Y':
-        risks.append({
-            "indicator": "CHAMELEON_PATTERN",
-            "severity": "CRITICAL",
-            "detail": "New authority combined with prior revocation — strong chameleon carrier indicator"
-        })
+    if age_months < 18 and carrier.get("prior_revoke_flag") == "Y":
+        risks.append(
+            {
+                "indicator": "CHAMELEON_PATTERN",
+                "severity": "CRITICAL",
+                "detail": "New authority combined with prior revocation — strong chameleon carrier indicator",
+            }
+        )
 
     return risks
 ```
@@ -266,13 +276,17 @@ Focus on common authority status and the property sub_type. Check that `common_a
 
 **User prompt**: "Show authority history for this carrier"
 
-Fetch the full authority history via `/authority/{dot}/history`. Present a chronological timeline of all status changes. Highlight revocations, reinstatements, and any patterns. Calculate time between events. Note if the authority has been stable or volatile.
+Fetch the full authority history via `/authority/{docketNumber}/history`. Present a chronological timeline of all status changes. Highlight revocations, reinstatements, and any patterns. Calculate time between events. Note if the authority has been stable or volatile.
 
 ### MC vs DOT number explanation
 
 **User prompt**: "What's the difference between this carrier's MC and DOT numbers?"
 
 Explain that the DOT number is the FMCSA registration number (required for all commercial vehicles in interstate commerce) while the MC number is the operating authority docket number (required for for-hire carriers and brokers). A carrier can have a DOT number without an MC number if they operate as a private carrier. Show both numbers from the carrier record and what authority the MC number grants.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 
@@ -293,7 +307,7 @@ When encountering errors, report them clearly. Authority status is binary — a 
 - FMCSA New Entrant Safety Assurance Program: 49 CFR Part 385 Subpart D
 - FMCSA Household Goods Regulations: 49 CFR Part 375
 - Docket number registration: FMCSA OP-1 Form
-- SearchCarriers API Documentation: `{baseDir}/docs/api-reference.md`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`
 - Authority status codes reference: `{baseDir}/docs/authority-codes.md`
 - FMCSA SAFER System: https://safer.fmcsa.dot.gov
 - FMCSA LICENSING & INSURANCE (L&I) System: https://li-public.fmcsa.dot.gov

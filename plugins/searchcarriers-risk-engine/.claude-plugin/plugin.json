@@ -1,7 +1,7 @@
 {
   "name": "searchcarriers-risk-engine",
   "description": "Risk scoring, vetting checks, insurance validation, and compliance auditing for motor carriers.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "mcp",
   "pipeline_stage": "analysis",
   "min_tier": "pro",
@@ -28,6 +28,6 @@
     }
   ],
   "author": "Jeremy Longshore <jeremy@intentsolutions.io>",
-  "license": "BUSL-1.1",
-  "repository": "https://github.com/intent-solutions-io/searchcarriers"
+  "license": "Apache-2.0",
+  "repository": "https://github.com/jeremylongshore/searchcarriers-tools"
 }

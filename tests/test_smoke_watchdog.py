@@ -12,18 +12,18 @@ sys.path.insert(
     str(_repo_root / "plugins" / "searchcarriers-watchdog" / "scripts"),
 )
 
+from conftest import assert_no_error, save_artifact  # noqa: E402
 from watchdog_mcp import (  # noqa: E402
-    _manage_watchlist,
     _get_alerts,
+    _manage_watchlist,
     _monitor_compliance,
 )
-from conftest import assert_no_error, save_artifact  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DOT_JBHUNT = "299569"
+DOT_PRIMARY = "299569"
 
 
 # ---------------------------------------------------------------------------
@@ -75,16 +75,14 @@ class TestWatchdogSmoke:
         save_artifact(smoke_reports_dir, "get_alerts", result)
 
     async def test_monitor_compliance(self, live_api_key, smoke_reports_dir):
-        """_monitor_compliance returns a structured compliance report for J.B. Hunt."""
-        result = await _monitor_compliance({"dot_number": DOT_JBHUNT}, live_api_key)
+        """_monitor_compliance returns a structured compliance report for a known carrier."""
+        result = await _monitor_compliance({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
-        assert result.get("dot_number") == DOT_JBHUNT, (
-            f"Expected dot_number={DOT_JBHUNT!r}, got: {result.get('dot_number')!r}"
+        assert result.get("dot_number") == DOT_PRIMARY, (
+            f"Expected dot_number={DOT_PRIMARY!r}, got: {result.get('dot_number')!r}"
         )
-        assert "compliance_status" in result, (
-            f"Missing 'compliance_status' in result: {result}"
-        )
+        assert "compliance_status" in result, f"Missing 'compliance_status' in result: {result}"
         assert result["compliance_status"] in ("compliant", "drift", "critical"), (
             f"Unexpected compliance_status value: {result['compliance_status']!r}"
         )

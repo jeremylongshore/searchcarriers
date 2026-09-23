@@ -50,17 +50,17 @@ The Risk Engine consumes these outputs for scoring. The Ops Reporter formats the
 
 | Endpoint | Method | Used By |
 |----------|--------|---------|
-| `/api/v1/search` | GET | carrier_lookup |
-| `/api/v1/company/{dot}/authorities` | GET | carrier_profile |
-| `/api/v1/company/{dot}/insurances` | GET | carrier_profile |
-| `/api/v1/company/{dot}/equipment` | GET | entity_map, fleet_summary |
-| `/api/v1/company/{dot}/vehicles` | GET | fleet_summary |
+| `/api/v3/search` | GET | carrier_lookup |
+| `/api/v3/company/{dot}?fields=...` | GET | carrier_profile, entity_map |
+| `/api/v3/company/{dot}/equipment` | GET | entity_map, fleet_summary |
+| `/api/v1/search/by-vin/{vin}` | GET | entity_map |
+| `/api/v1/search/scac` | GET | carrier_lookup |
 
 ## Configuration
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SEARCHCARRIERS_API_KEY` | Yes | API bearer token from searchcarriers.com/settings/api |
+| `SEARCHCARRIERS_API_KEY` | Yes | API bearer token from searchcarriers.com/settings/api-tokens |
 
 ## Docs
 

@@ -26,8 +26,6 @@ _PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
-
 # ---------------------------------------------------------------------------
 # MCP SDK
 # ---------------------------------------------------------------------------
@@ -35,16 +33,20 @@ from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
+from plugins.shared.api_contract import API_V3_BASE, normalize_v3_company  # noqa: E402
+from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 API_BASE = "https://searchcarriers.com/api/v1"
+SEARCH_BASE = API_V3_BASE
 REQUEST_TIMEOUT = 15.0  # seconds
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # National OOS rate benchmarks (FMCSA 2023 averages)
-NATIONAL_OOS_VEHICLE_AVG = 21.0   # percent
-NATIONAL_OOS_DRIVER_AVG = 6.0     # percent
+NATIONAL_OOS_VEHICLE_AVG = 21.0  # percent
+NATIONAL_OOS_DRIVER_AVG = 6.0  # percent
 
 # Insurance minimums (USD) by commodity class
 MIN_GENERAL_FREIGHT_COVERAGE = 750_000
@@ -152,9 +154,7 @@ async def _get(
 
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
-        raise RuntimeError(
-            f"Rate limit hit (429). Retry after {retry_after} seconds."
-        )
+        raise RuntimeError(f"Rate limit hit (429). Retry after {retry_after} seconds.")
 
     status_messages = {
         401: "Invalid or missing API key (401). Check SEARCHCARRIERS_API_KEY.",
@@ -306,8 +306,7 @@ def _score_insurance(insurances: list[dict[str, Any]]) -> tuple[int, str]:
         return 20, "No insurance records found — coverage cannot be confirmed."
 
     active = [
-        ins for ins in insurances
-        if str(ins.get("status") or "").lower() in ("active", "current")
+        ins for ins in insurances if str(ins.get("status") or "").lower() in ("active", "current")
     ]
     if not active:
         return 20, "No active insurance policies found — carrier may be uninsured."
@@ -374,9 +373,7 @@ def _score_mcs150(carrier: dict[str, Any]) -> tuple[int, str]:
             f"(FMCSA requires biennial filing)."
         )
     if age_years > MCS150_STALE_YEARS:
-        return 5, (
-            f"MCS-150 filed {age_years:.1f} years ago — past the 2-year filing cycle."
-        )
+        return 5, (f"MCS-150 filed {age_years:.1f} years ago — past the 2-year filing cycle.")
     return 0, f"MCS-150 is current (filed {age_years:.1f} years ago)."
 
 
@@ -406,12 +403,10 @@ async def _risk_score(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     """
     dot: str = str(arguments["dot_number"]).strip()
 
-    search_url = f"{API_BASE}/search"
+    search_url = f"{SEARCH_BASE}/search"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task = _get(client, search_url, params={"dotNumber": dot})
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        search_task = _get(client, search_url, params={"dotNumber": dot, "perPage": 1})
         authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
         insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
@@ -424,17 +419,15 @@ async def _risk_score(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     if isinstance(search_result, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_result}")
 
-    carrier = _extract_carrier(search_result)
+    carrier = normalize_v3_company(_extract_carrier(search_result))
     if not carrier:
         return _error_payload("not_found", f"No carrier found for DOT {dot}.")
 
     authorities = (
-        [] if isinstance(authorities_result, Exception)
-        else _extract_list(authorities_result)
+        [] if isinstance(authorities_result, Exception) else _extract_list(authorities_result)
     )
     insurances = (
-        [] if isinstance(insurances_result, Exception)
-        else _extract_list(insurances_result)
+        [] if isinstance(insurances_result, Exception) else _extract_list(insurances_result)
     )
 
     # Evaluate each risk dimension.
@@ -449,12 +442,14 @@ async def _risk_score(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     ) -> None:
         nonlocal total_score
         total_score += penalty
-        factors.append({
-            "factor": name,
-            "penalty": penalty,
-            "description": description,
-            "weight": weight,
-        })
+        factors.append(
+            {
+                "factor": name,
+                "penalty": penalty,
+                "description": description,
+                "weight": weight,
+            }
+        )
 
     op_penalty, op_desc = _score_operating_status(carrier)
     _add_factor("operating_status", op_penalty, op_desc, weight="high")
@@ -515,12 +510,10 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     custom_rules: dict[str, Any] = arguments.get("rules") or {}
     rules = {**DEFAULT_VETTING_RULES, **custom_rules}
 
-    search_url = f"{API_BASE}/search"
+    search_url = f"{SEARCH_BASE}/search"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task = _get(client, search_url, params={"dotNumber": dot})
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        search_task = _get(client, search_url, params={"dotNumber": dot, "perPage": 1})
         authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
         insurances_task = _get(client, f"{API_BASE}/company/{dot}/insurances")
 
@@ -533,17 +526,15 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     if isinstance(search_result, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_result}")
 
-    carrier = _extract_carrier(search_result)
+    carrier = normalize_v3_company(_extract_carrier(search_result))
     if not carrier:
         return _error_payload("not_found", f"No carrier found for DOT {dot}.")
 
     authorities = (
-        [] if isinstance(authorities_result, Exception)
-        else _extract_list(authorities_result)
+        [] if isinstance(authorities_result, Exception) else _extract_list(authorities_result)
     )
     insurances = (
-        [] if isinstance(insurances_result, Exception)
-        else _extract_list(insurances_result)
+        [] if isinstance(insurances_result, Exception) else _extract_list(insurances_result)
     )
 
     rule_results: list[dict[str, Any]] = []
@@ -556,27 +547,32 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
         message: str,
     ) -> None:
         """Append a rule result record."""
-        rule_results.append({
-            "rule": name,
-            "status": status,
-            "actual": actual,
-            "threshold": threshold,
-            "message": message,
-        })
+        rule_results.append(
+            {
+                "rule": name,
+                "status": status,
+                "actual": actual,
+                "threshold": threshold,
+                "message": message,
+            }
+        )
 
     # Rule 1: Operating status.
     op_status = str(carrier.get("operatingStatus") or "").lower()
-    expected_status = str(rules["operating_status"]).lower()
     if "authorized" in op_status and "not" not in op_status:
         _rule(
-            "operating_status", "pass",
-            carrier.get("operatingStatus"), rules["operating_status"],
+            "operating_status",
+            "pass",
+            carrier.get("operatingStatus"),
+            rules["operating_status"],
             "Carrier is currently authorized to operate.",
         )
     else:
         _rule(
-            "operating_status", "fail",
-            carrier.get("operatingStatus"), rules["operating_status"],
+            "operating_status",
+            "fail",
+            carrier.get("operatingStatus"),
+            rules["operating_status"],
             f"Carrier is not authorized (status: {carrier.get('operatingStatus')!r}).",
         )
 
@@ -584,8 +580,7 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     # Uses max() across individual policy amounts — the $750K minimum applies
     # per-policy, not in aggregate across all policies.
     active_insurances = [
-        ins for ins in insurances
-        if str(ins.get("status") or "").lower() in ("active", "current")
+        ins for ins in insurances if str(ins.get("status") or "").lower() in ("active", "current")
     ]
     policy_amounts: list[float] = []
     for ins in active_insurances:
@@ -600,27 +595,35 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     min_coverage = float(rules["min_insurance_coverage"])
     if active_insurances and max_coverage >= min_coverage:
         _rule(
-            "min_insurance_coverage", "pass",
-            max_coverage, min_coverage,
+            "min_insurance_coverage",
+            "pass",
+            max_coverage,
+            min_coverage,
             f"Highest single-policy coverage ${max_coverage:,.0f} meets the ${min_coverage:,.0f} minimum.",
         )
     elif active_insurances and max_coverage > 0:
         _rule(
-            "min_insurance_coverage", "fail",
-            max_coverage, min_coverage,
+            "min_insurance_coverage",
+            "fail",
+            max_coverage,
+            min_coverage,
             f"Highest single-policy coverage ${max_coverage:,.0f} is below the ${min_coverage:,.0f} minimum.",
         )
     elif active_insurances:
         # Active policies exist but no parseable coverage amounts in API data.
         _rule(
-            "min_insurance_coverage", "review",
-            "coverage amounts unavailable", min_coverage,
+            "min_insurance_coverage",
+            "review",
+            "coverage amounts unavailable",
+            min_coverage,
             "Active policies found but coverage amounts could not be parsed — manual review required.",
         )
     else:
         _rule(
-            "min_insurance_coverage", "fail",
-            "no active policies", min_coverage,
+            "min_insurance_coverage",
+            "fail",
+            "no active policies",
+            min_coverage,
             "No active insurance policies found.",
         )
 
@@ -633,20 +636,26 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     max_oos = float(rules["max_oos_rate"])
     if oos_rate < 0:
         _rule(
-            "max_oos_rate", "review",
-            "unavailable", f"<= {max_oos}%",
+            "max_oos_rate",
+            "review",
+            "unavailable",
+            f"<= {max_oos}%",
             "OOS rate data unavailable — manual review required.",
         )
     elif oos_rate <= max_oos:
         _rule(
-            "max_oos_rate", "pass",
-            f"{oos_rate:.1f}%", f"<= {max_oos}%",
+            "max_oos_rate",
+            "pass",
+            f"{oos_rate:.1f}%",
+            f"<= {max_oos}%",
             f"Vehicle OOS rate {oos_rate:.1f}% is within the {max_oos:.0f}% threshold.",
         )
     else:
         _rule(
-            "max_oos_rate", "fail",
-            f"{oos_rate:.1f}%", f"<= {max_oos}%",
+            "max_oos_rate",
+            "fail",
+            f"{oos_rate:.1f}%",
+            f"<= {max_oos}%",
             f"Vehicle OOS rate {oos_rate:.1f}% exceeds the {max_oos:.0f}% threshold.",
         )
 
@@ -661,49 +670,61 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
     max_crash_rate = float(rules["max_crash_rate_per_pu"])
     if crash_rate < 0:
         _rule(
-            "max_crash_rate_per_pu", "review",
-            "unavailable", f"<= {max_crash_rate}",
+            "max_crash_rate_per_pu",
+            "review",
+            "unavailable",
+            f"<= {max_crash_rate}",
             "Crash rate cannot be calculated — fleet size data unavailable.",
         )
     elif crash_rate <= max_crash_rate:
         _rule(
-            "max_crash_rate_per_pu", "pass",
-            f"{crash_rate:.3f}", f"<= {max_crash_rate}",
+            "max_crash_rate_per_pu",
+            "pass",
+            f"{crash_rate:.3f}",
+            f"<= {max_crash_rate}",
             f"Crash rate {crash_rate:.3f}/PU is within the {max_crash_rate} threshold.",
         )
     else:
         _rule(
-            "max_crash_rate_per_pu", "fail",
-            f"{crash_rate:.3f}", f"<= {max_crash_rate}",
+            "max_crash_rate_per_pu",
+            "fail",
+            f"{crash_rate:.3f}",
+            f"<= {max_crash_rate}",
             f"Crash rate {crash_rate:.3f}/PU exceeds the {max_crash_rate} threshold.",
         )
 
     # Rule 5: Active operating authority.
     active_authorities = [
-        a for a in authorities
+        a
+        for a in authorities
         if "active" in str(a.get("status") or "").lower()
         or "authorized" in str(a.get("status") or "").lower()
     ]
     if not authorities:
         _rule(
-            "authority_active", "review",
-            "no records", True,
+            "authority_active",
+            "review",
+            "no records",
+            True,
             "No authority records returned — manual verification required.",
         )
     elif active_authorities:
         auth_types = [
-            str(a.get("type") or a.get("authorityType") or "unknown")
-            for a in active_authorities
+            str(a.get("type") or a.get("authorityType") or "unknown") for a in active_authorities
         ]
         _rule(
-            "authority_active", "pass",
-            True, True,
+            "authority_active",
+            "pass",
+            True,
+            True,
             f"Active authority confirmed: {', '.join(auth_types)}.",
         )
     else:
         _rule(
-            "authority_active", "fail",
-            False, True,
+            "authority_active",
+            "fail",
+            False,
+            True,
             "No active operating authority found — all authorities are revoked or inactive.",
         )
 
@@ -714,20 +735,26 @@ async def _vetting_check(arguments: dict[str, Any], api_key: str) -> dict[str, A
 
     if mcs_age is None:
         _rule(
-            "mcs150_current", "review",
-            "unavailable", f"<= {MCS150_STALE_YEARS} years",
+            "mcs150_current",
+            "review",
+            "unavailable",
+            f"<= {MCS150_STALE_YEARS} years",
             "MCS-150 filing date not available — cannot confirm currency.",
         )
     elif mcs_age <= MCS150_STALE_YEARS:
         _rule(
-            "mcs150_current", "pass",
-            f"{mcs_age:.1f} years", f"<= {MCS150_STALE_YEARS} years",
+            "mcs150_current",
+            "pass",
+            f"{mcs_age:.1f} years",
+            f"<= {MCS150_STALE_YEARS} years",
             f"MCS-150 filed {mcs_age:.1f} years ago — within the 2-year filing cycle.",
         )
     else:
         _rule(
-            "mcs150_current", "fail",
-            f"{mcs_age:.1f} years", f"<= {MCS150_STALE_YEARS} years",
+            "mcs150_current",
+            "fail",
+            f"{mcs_age:.1f} years",
+            f"<= {MCS150_STALE_YEARS} years",
             f"MCS-150 is {mcs_age:.1f} years old — overdue for biennial re-filing.",
         )
 
@@ -774,9 +801,7 @@ async def _insurance_check(arguments: dict[str, Any], api_key: str) -> dict[str,
     """
     dot: str = str(arguments["dot_number"]).strip()
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         try:
             raw = await _get(client, f"{API_BASE}/company/{dot}/insurances")
         except RuntimeError as exc:
@@ -842,7 +867,6 @@ async def _insurance_check(arguments: dict[str, Any], api_key: str) -> dict[str,
         else:
             # Check whether the lapse is recent (within 12 months).
             cancel_dt = _parse_date(ins.get("cancellationDate"))
-            effective_dt = _parse_date(ins.get("effectiveDate"))
             if cancel_dt:
                 months_lapsed = (now - cancel_dt).days / 30
                 if months_lapsed <= 12:
@@ -862,14 +886,8 @@ async def _insurance_check(arguments: dict[str, Any], api_key: str) -> dict[str,
             )
 
     # Coverage type checks — flag if no liability policy found.
-    active_types = [
-        str(p.get("type") or "").lower()
-        for p in active_policies
-    ]
-    has_liability = any(
-        "liab" in t or "public" in t
-        for t in active_types
-    )
+    active_types = [str(p.get("type") or "").lower() for p in active_policies]
+    has_liability = any("liab" in t or "public" in t for t in active_types)
     if active_policies and not has_liability:
         warnings.append(
             "No liability insurance policy identified among active policies — "
@@ -907,30 +925,25 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
     """
     dot: str = str(arguments["dot_number"]).strip()
 
-    search_url = f"{API_BASE}/search"
+    search_url = f"{SEARCH_BASE}/search"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task = _get(client, search_url, params={"dotNumber": dot})
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        search_task = _get(client, search_url, params={"dotNumber": dot, "perPage": 1})
         authorities_task = _get(client, f"{API_BASE}/company/{dot}/authorities")
 
-        results = await asyncio.gather(
-            search_task, authorities_task, return_exceptions=True
-        )
+        results = await asyncio.gather(search_task, authorities_task, return_exceptions=True)
 
     search_result, authorities_result = results
 
     if isinstance(search_result, Exception):
         return _error_payload("api_error", f"Carrier lookup failed: {search_result}")
 
-    carrier = _extract_carrier(search_result)
+    carrier = normalize_v3_company(_extract_carrier(search_result))
     if not carrier:
         return _error_payload("not_found", f"No carrier found for DOT {dot}.")
 
     authorities = (
-        [] if isinstance(authorities_result, Exception)
-        else _extract_list(authorities_result)
+        [] if isinstance(authorities_result, Exception) else _extract_list(authorities_result)
     )
 
     checks: list[dict[str, Any]] = []
@@ -957,9 +970,7 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
     mcs_info: dict[str, Any] = {
         "filingDate": raw_mcs,
         "ageYears": round(mcs_age, 2) if mcs_age is not None else None,
-        "isCurrentWithinTwoYears": (
-            mcs_age is not None and mcs_age <= MCS150_STALE_YEARS
-        ),
+        "isCurrentWithinTwoYears": (mcs_age is not None and mcs_age <= MCS150_STALE_YEARS),
     }
 
     if mcs_age is None:
@@ -1016,7 +1027,8 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Check 3: Active operating authority presence.
     active_auths = [
-        a for a in authorities
+        a
+        for a in authorities
         if "active" in str(a.get("status") or "").lower()
         or "authorized" in str(a.get("status") or "").lower()
     ]
@@ -1028,8 +1040,7 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
         )
     elif active_auths:
         auth_types = [
-            str(a.get("type") or a.get("authorityType") or "unknown")
-            for a in active_auths
+            str(a.get("type") or a.get("authorityType") or "unknown") for a in active_auths
         ]
         _check(
             "operating_authority",
@@ -1037,10 +1048,7 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
             f"Active operating authority on file: {', '.join(auth_types)}.",
         )
     else:
-        revoked = [
-            str(a.get("type") or a.get("authorityType") or "unknown")
-            for a in authorities
-        ]
+        revoked = [str(a.get("type") or a.get("authorityType") or "unknown") for a in authorities]
         _check(
             "operating_authority",
             "fail",
@@ -1050,13 +1058,11 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Check 4: Common carrier authority.
     common_auths = [
-        a for a in authorities
+        a
+        for a in authorities
         if "common" in str(a.get("type") or a.get("authorityType") or "").lower()
     ]
-    active_common = [
-        a for a in common_auths
-        if "active" in str(a.get("status") or "").lower()
-    ]
+    active_common = [a for a in common_auths if "active" in str(a.get("status") or "").lower()]
     if active_common:
         _check(
             "common_carrier_authority",
@@ -1078,13 +1084,11 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Check 5: Contract carrier authority.
     contract_auths = [
-        a for a in authorities
+        a
+        for a in authorities
         if "contract" in str(a.get("type") or a.get("authorityType") or "").lower()
     ]
-    active_contract = [
-        a for a in contract_auths
-        if "active" in str(a.get("status") or "").lower()
-    ]
+    active_contract = [a for a in contract_auths if "active" in str(a.get("status") or "").lower()]
     if active_contract:
         _check(
             "contract_carrier_authority",
@@ -1106,13 +1110,11 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Check 6: Broker authority (informational).
     broker_auths = [
-        a for a in authorities
+        a
+        for a in authorities
         if "broker" in str(a.get("type") or a.get("authorityType") or "").lower()
     ]
-    active_broker = [
-        a for a in broker_auths
-        if "active" in str(a.get("status") or "").lower()
-    ]
+    active_broker = [a for a in broker_auths if "active" in str(a.get("status") or "").lower()]
     if active_broker:
         _check(
             "broker_authority",
@@ -1129,15 +1131,13 @@ async def _compliance_audit(arguments: dict[str, Any], api_key: str) -> dict[str
 
     # Check 7: Hazmat authority (if any hazmat record exists).
     hazmat_auths = [
-        a for a in authorities
+        a
+        for a in authorities
         if "hazmat" in str(a.get("type") or a.get("authorityType") or "").lower()
         or "hm" in str(a.get("type") or a.get("authorityType") or "").lower()
     ]
     if hazmat_auths:
-        active_hazmat = [
-            a for a in hazmat_auths
-            if "active" in str(a.get("status") or "").lower()
-        ]
+        active_hazmat = [a for a in hazmat_auths if "active" in str(a.get("status") or "").lower()]
         if active_hazmat:
             _check(
                 "hazmat_authority",

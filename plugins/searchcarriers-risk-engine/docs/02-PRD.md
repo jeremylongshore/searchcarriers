@@ -193,7 +193,7 @@ As a **compliance analyst**, I want to **audit a carrier's regulatory compliance
 
 ## MVP Scope
 
-Ships in v0.1.0:
+Historical v0.1.0 planning scope:
 
 - [ ] `risk_score` -- composite 0-100 scoring with weighted breakdown
 - [ ] `insurance_check` -- coverage analysis with gap detection

@@ -1,3 +1,17 @@
+---
+name: risk-analyst
+description: Evaluate carrier risk, vetting rules, insurance evidence, and compliance checks with explicit missing-data limits.
+tools: Read, Grep, Bash
+disallowedTools: []
+model: inherit
+color: orange
+version: 0.2.0
+author: Jeremy Longshore
+tags: [searchcarriers, motor-carrier, risk-analyst]
+skills: [searchcarriers-risk-engine]
+background: false
+---
+
 # Risk Analyst Agent
 
 ## Identity

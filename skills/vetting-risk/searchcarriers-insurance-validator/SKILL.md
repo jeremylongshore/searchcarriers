@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-insurance-validator
-description: >-
-  Validates carrier insurance coverage status, detects lapses, and verifies minimum
-  coverage requirements. Use when vetting a carrier's insurance or checking for coverage gaps.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Validates carrier insurance coverage status, detects lapses, and verifies minimum coverage requirements. Use when vetting a carrier's insurance or checking for coverage gaps.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- vetting-risk
 ---
 
 # Insurance Validator
@@ -35,15 +38,15 @@ If the user provides a DOT number, proceed to Step 2. If they provide an MC numb
 ```bash
 # Search by MC number
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?mcNumber=1672915"
+  "https://searchcarriers.com/api/v3/search?docketNumber=1672915"
 
 # Search by legal name
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?legalName=PACIFIC%20TRANSPORT"
+  "https://searchcarriers.com/api/v3/search?superSearchTerm=PACIFIC%20TRANSPORT"
 
 # Search by DOT number directly
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber=12345"
+  "https://searchcarriers.com/api/v3/search?dotNumber=12345"
 ```
 
 Extract the `dot_number` from the response to use in subsequent calls.
@@ -112,16 +115,24 @@ Insurance lapses are among the most serious red flags in carrier vetting. Analyz
 import json
 from datetime import datetime, timedelta
 
+
 # Parse insurance records (assume `records` is the list of BIPD insurance entries)
 def detect_gaps(records):
-    bipd = [r for r in records if 'BIPD' in r.get('insurance_type', '').upper()
-            or 'BODILY' in r.get('insurance_type', '').upper()]
+    bipd = [
+        r
+        for r in records
+        if "BIPD" in r.get("insurance_type", "").upper()
+        or "BODILY" in r.get("insurance_type", "").upper()
+    ]
 
     periods = []
     for r in bipd:
-        eff = datetime.strptime(r['effective_date'], '%Y-%m-%d')
-        cancel = (datetime.strptime(r['cancelled_date'], '%Y-%m-%d')
-                  if r.get('cancelled_date') else datetime.now())
+        eff = datetime.strptime(r["effective_date"], "%Y-%m-%d")
+        cancel = (
+            datetime.strptime(r["cancelled_date"], "%Y-%m-%d")
+            if r.get("cancelled_date")
+            else datetime.now()
+        )
         periods.append((eff, cancel))
 
     periods.sort(key=lambda x: x[0])
@@ -131,16 +142,18 @@ def detect_gaps(records):
         return [("NO_COVERAGE", "No BIPD records found")]
 
     for i in range(1, len(periods)):
-        prev_end = periods[i-1][1]
+        prev_end = periods[i - 1][1]
         curr_start = periods[i][0]
         if curr_start > prev_end + timedelta(days=1):
             gap_days = (curr_start - prev_end).days
-            gaps.append({
-                "from": prev_end.strftime('%Y-%m-%d'),
-                "to": curr_start.strftime('%Y-%m-%d'),
-                "days": gap_days,
-                "severity": "SEVERE" if gap_days > 30 else "WARNING"
-            })
+            gaps.append(
+                {
+                    "from": prev_end.strftime("%Y-%m-%d"),
+                    "to": curr_start.strftime("%Y-%m-%d"),
+                    "days": gap_days,
+                    "severity": "SEVERE" if gap_days > 30 else "WARNING",
+                }
+            )
 
     return gaps
 ```
@@ -243,13 +256,17 @@ Focus on BIPD records only. Check for an active policy with `insurance_status` =
 
 **User prompt**: "Show me insurance history for MC 1672915"
 
-First resolve the MC number to a DOT number via `/search?mcNumber=1672915`. Then fetch all insurance records across all pages. Present them in chronological order, highlighting any gaps, cancellations, and changes in insurer. Include the lapse analysis.
+First resolve the MC number to a DOT number via `/api/v3/search?docketNumber=1672915`. Then fetch all insurance records across all pages. Present them in chronological order, highlighting any gaps, cancellations, and changes in insurer. Include the lapse analysis.
 
 ### Validate insurance for hazmat carrier
 
 **User prompt**: "Check if this hazmat carrier has enough insurance"
 
 Check the carrier's `hm_ind` field. If "Y", apply the $5,000,000 minimum for bulk hazmat or $1,000,000 for non-bulk. Report the current BIPD amount and whether it meets the hazmat threshold.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 
@@ -269,6 +286,6 @@ When an API call fails, report the HTTP status code and response body. Do not si
 - FMCSA Insurance Requirements: 49 CFR Part 387
 - FMCSA Minimum Levels of Financial Responsibility: 49 CFR 387.9
 - BMC-91X Surety Bond form: FMCSA Form BMC-91X
-- SearchCarriers API Documentation: `{baseDir}/docs/api-reference.md`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`
 - Insurance status codes reference: `{baseDir}/docs/insurance-codes.md`
 - FMCSA SAFER System: https://safer.fmcsa.dot.gov

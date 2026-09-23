@@ -217,9 +217,9 @@ This design means Ops Reporter never fails due to missing upstream data. It prod
 
 ## Security Model
 
-**No API access:** Ops Reporter does not hold or use the SearchCarriers API key for data retrieval. It receives pre-fetched data as function arguments. The API key is referenced in `.mcp.json` for future use (planned features) but is not used in v0.1.
+**API access:** Ops Reporter reads `SEARCHCARRIERS_API_KEY` at request time and fetches the current carrier sections needed for reports, comparisons, fleet analysis, and export. Calls use the documented v3 company contract plus the retained v1 detail routes described in `API-DISCOVERY.md`. Callers may also supply pre-fetched data where a tool schema permits it.
 
-**No data storage:** Ops Reporter is stateless. Data enters as function arguments, gets formatted, and the formatted output is returned. Nothing is written to disk, cached, or persisted. Generated reports exist only in Claude's context and the user's terminal output.
+**No upstream-data storage:** Ops Reporter is stateless. API responses are formatted in memory and returned to the caller. It does not cache or persist licensed SearchCarriers response data. A caller may explicitly save a generated report outside the plugin.
 
 **Disclaimer enforcement:** Every generated report, comparison, and export includes a disclaimer. The disclaimer is appended at the response-building layer, not the presentation layer, so it cannot be accidentally omitted.
 

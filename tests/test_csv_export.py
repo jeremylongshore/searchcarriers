@@ -19,7 +19,7 @@ sys.path.insert(
     str(_repo_root / "plugins" / "searchcarriers-ops-reporter" / "scripts"),
 )
 
-from csv_export import CARRIER_COLUMNS, generate_carrier_csv
+from csv_export import generate_carrier_csv
 from field_map import normalize_authority, normalize_carrier, normalize_insurance
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -27,7 +27,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def real_api_data():
-    return json.loads((FIXTURES_DIR / "carrier_realapi.json").read_text())
+    return json.loads((FIXTURES_DIR / "carrier_nested.json").read_text())
 
 
 @pytest.fixture

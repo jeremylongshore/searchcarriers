@@ -167,7 +167,7 @@ As an **IT manager**, I want to **create, list, update, and delete Carrier Watch
 
 ## MVP Scope
 
-Ships in v0.1.0:
+Historical v0.1.0 planning scope:
 
 - [ ] `api_health` -- endpoint probing with response times and rate limit status
 - [ ] `bulk_lookup` -- batch carrier lookups (basic and standard sections)

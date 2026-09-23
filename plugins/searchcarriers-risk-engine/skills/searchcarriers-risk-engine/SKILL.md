@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-risk-engine
-description: >-
-  Assess carrier risk with scoring, vetting, insurance, and compliance tools.
-  Use when evaluating carrier safety or qualification.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Assess carrier risk with scoring, vetting, insurance, and compliance tools. Use when evaluating carrier safety or qualification.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- plugin
 ---
 
 # Risk Engine -- Embedded Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This skill provides the analysis layer for the searchcarriers Risk Engine plugin. It teaches you how to interpret outputs from the four Risk Engine MCP tools (`risk_score`, `vetting_check`, `insurance_check`, `compliance_audit`), apply freight-industry risk context, detect critical patterns, and format results for both human consumption and downstream pipeline stages.
 
@@ -136,7 +141,7 @@ Every Risk Engine tool response includes a `_pipeline` key for downstream consum
   "_pipeline": {
     "source": "searchcarriers-risk-engine",
     "tool": "risk_score",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "dot_number": 1234567,
     "timestamp": "2026-02-26T14:30:00Z",
     "tier": "pro",
@@ -220,6 +225,10 @@ User asks: "Vet DOT 2345678 with strict rules"
 ### Example 3: Pipeline Handoff to Ops Reporter
 
 After running all four Risk Engine tools, collect each `_pipeline.data` object and assemble into the Ops Reporter input envelope with keys: `dot_number`, `carrier_intel` (from upstream), and `risk_engine` containing sub-keys `risk_score`, `vetting_check`, `insurance_check`, `compliance_audit`. Validate all four are present before passing downstream.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

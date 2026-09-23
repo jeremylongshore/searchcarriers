@@ -458,7 +458,11 @@ def score_authority(carrier: dict, authorities: list[dict]) -> int:
 
     # Any revocations in history
     for auth in authorities:
-        for field in ["common_authority_status", "contract_authority_status", "broker_authority_status"]:
+        for field in [
+            "common_authority_status",
+            "contract_authority_status",
+            "broker_authority_status",
+        ]:
             if auth.get(field) == "R":  # Revoked
                 score += 30
                 break
@@ -506,6 +510,7 @@ WEIGHTS = {
     "authority": 0.20,
     "operational": 0.20,
 }
+
 
 def composite_score(safety: int, insurance: int, authority: int, operational: int) -> int:
     raw = (

@@ -45,7 +45,7 @@ API Bridge is a **STANDALONE** integration plugin. It does not participate in th
 | **Rate Limiter** | `scripts/rate_limiter.py` (planned) | Token bucket implementation shared across all tools. Tracks API call budget, enforces 3 req/s ceiling, provides remaining budget to api_health. |
 | **TMS Mapper** | `scripts/tms_mapper.py` (planned) | Field mapping engine. Loads TMS format definitions, maps SearchCarriers fields to TMS columns, handles date and status code translation. |
 | **Health Checker** | `scripts/health.py` (planned) | Endpoint probing logic. Tests each API endpoint, measures response time, parses rate limit headers, computes aggregate health status. |
-| **Webhook Client** | `scripts/webhooks.py` (planned) | CRUD operations against the Carrier Watch webhook API. Validates inputs, makes API calls, returns structured results. |
+| **Local Webhook Registry** | `webhook_manage` in the MCP server | Stores downstream delivery configuration locally. It does not call an upstream SearchCarriers webhook API. |
 | **Commands** | `commands/` (planned) | Slash command definitions for common operations. |
 | **Embedded Skill** | `skills/` (planned) | Teaches Claude when to use API Bridge tools, how to chain bulk_lookup with tms_sync, and how to interpret health check results. |
 
@@ -164,8 +164,8 @@ MCP Server: webhook_manage(action="create", url="https://hooks.example.com/carri
   +--> Validate URL: must be HTTPS, valid format
   +--> Validate events: must be in known event type list
   |
-  +--> HTTP POST to Carrier Watch webhook API:
-  |    POST /api/v1/webhooks
+  +--> Write a local downstream webhook record:
+  |    ~/.searchcarriers/webhooks.json
   |    { url, events, secret }
   |
   +--> Return: { webhook_id, url, events, status: "active", created_at }

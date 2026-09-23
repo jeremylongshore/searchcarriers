@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-inspection-analyzer
-description: >-
-  Analyzes carrier inspection history for violation trends, OOS rates, and
-  driver-vs-vehicle breakdowns. Use when evaluating inspection patterns.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Analyzes carrier inspection history for violation trends, OOS rates, and driver-vs-vehicle breakdowns. Use when evaluating inspection patterns.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- safety-compliance
 ---
 
 # Inspection Analyzer
@@ -112,24 +115,25 @@ from datetime import datetime, timedelta
 
 # Assume `inspections` is the full list of inspection records
 total = len(inspections)
-total_violations = sum(i.get('viol_total', 0) for i in inspections)
-total_oos = sum(i.get('oos_total', 0) for i in inspections)
+total_violations = sum(i.get("viol_total", 0) for i in inspections)
+total_oos = sum(i.get("oos_total", 0) for i in inspections)
 
 # OOS rate
 oos_rate = (total_oos / total * 100) if total > 0 else 0
 
 # Driver vs Vehicle breakdown
-driver_viols = sum(i.get('driver_viol_total', 0) for i in inspections)
-vehicle_viols = sum(i.get('vehicle_viol_total', 0) for i in inspections)
-hazmat_viols = sum(i.get('hazmat_viol_total', 0) for i in inspections)
+driver_viols = sum(i.get("driver_viol_total", 0) for i in inspections)
+vehicle_viols = sum(i.get("vehicle_viol_total", 0) for i in inspections)
+hazmat_viols = sum(i.get("hazmat_viol_total", 0) for i in inspections)
 
 # Driver OOS rate: inspections with driver OOS / total inspections
 # (approximate — true calculation uses driver inspections only)
-driver_oos = sum(1 for i in inspections if i.get('driver_viol_total', 0) > 0
-                 and i.get('oos_total', 0) > 0)
+driver_oos = sum(
+    1 for i in inspections if i.get("driver_viol_total", 0) > 0 and i.get("oos_total", 0) > 0
+)
 
 # Inspection level distribution
-level_dist = Counter(i.get('insp_level_id') for i in inspections)
+level_dist = Counter(i.get("insp_level_id") for i in inspections)
 ```
 
 **Metrics to report:**
@@ -151,9 +155,9 @@ part_counter = Counter()
 violation_details = defaultdict(list)
 
 for insp in inspections:
-    for v in insp.get('violations', []):
-        part = v.get('part_no', 'Unknown')
-        desc = v.get('violation_description', '')
+    for v in insp.get("violations", []):
+        part = v.get("part_no", "Unknown")
+        desc = v.get("violation_description", "")
         part_counter[part] += 1
         violation_details[part].append(desc)
 ```
@@ -186,14 +190,14 @@ Group inspections by quarter or month and plot the trajectory:
 ```python
 from collections import defaultdict
 
-quarterly = defaultdict(lambda: {'count': 0, 'violations': 0, 'oos': 0})
+quarterly = defaultdict(lambda: {"count": 0, "violations": 0, "oos": 0})
 
 for insp in inspections:
-    date = datetime.strptime(insp['insp_date'], '%Y-%m-%d')
+    date = datetime.strptime(insp["insp_date"], "%Y-%m-%d")
     quarter = f"{date.year}-Q{(date.month - 1) // 3 + 1}"
-    quarterly[quarter]['count'] += 1
-    quarterly[quarter]['violations'] += insp.get('viol_total', 0)
-    quarterly[quarter]['oos'] += insp.get('oos_total', 0)
+    quarterly[quarter]["count"] += 1
+    quarterly[quarter]["violations"] += insp.get("viol_total", 0)
+    quarterly[quarter]["oos"] += insp.get("oos_total", 0)
 ```
 
 Report the trend direction:
@@ -303,6 +307,10 @@ particularly around driver management."
 with a narrative interpretation of where they fall and what it means for risk
 assessment.
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | Scenario | Action |
@@ -322,4 +330,4 @@ assessment.
 - [49 CFR Parts Index](https://www.ecfr.gov/current/title-49) — full text of all regulations referenced by violation part numbers
 - [FMCSA National OOS Rate Data](https://ai.fmcsa.dot.gov/SafetyRating/) — source for benchmark rates
 - [CVSA Out-of-Service Criteria](https://www.cvsa.org/inspections/out-of-service-criteria/) — what triggers an OOS determination
-- SearchCarriers API reference: `{baseDir}/docs/api/`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`

@@ -7,10 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-22
+
 ### Added
-- LICENSE file (BSL 1.1, change date 2030-02-26, Apache 2.0 after)
+
+- Shared hybrid API contract for v3 search/company data, v2 qualification
+  reports, and documented v1 specialty, history, export, and watch routes.
+- Contract tests for v3 parameters, dedicated VIN/SCAC paths, company field
+  selection, and cross-version health probes.
+- Public contribution, security, support, conduct, ownership, and dependency
+  maintenance files.
+
+### Changed
+
+- Carrier Intel now uses v3 search and field-selected company requests. MC
+  lookup uses `docketNumber`; pagination uses `perPage`; location filters use
+  `addressState` and `addressCity`.
+- API Bridge, Risk Engine, Ops Reporter, and Watchdog current-state checks now
+  use v3 search while retaining documented v1 detail resources.
+- Watch management now uses the published company watch routes and removes a
+  watch by synchronizing an empty `watch_types` array.
+- Skills and workflows reference one API contract instead of independently
+  copying route tables.
+- Live smoke receipts retain response structure only, never carrier values.
+- Test fixtures are fully synthetic and use reserved example domains.
+- Project license changed from BSL 1.1 to Apache-2.0 for the public source
+  release. SearchCarriers API use still requires an appropriate account.
 
 ### Fixed
+
+- Removed calls to assumed alert-feed and upstream webhook CRUD routes that are
+  absent from the published API.
+- Encrypted environment launcher no longer sources decrypted dotenv data or
+  interprets token metacharacters as shell syntax.
+- Live-test secret fixtures redact their diagnostic representation so pytest
+  failures cannot print bearer tokens.
+- Removed obsolete `mcNumber`, `legalName`, `state`, `city`, `per_page`, and
+  query-string VIN guidance from current skills.
+
+### Additional fixes
 - pyproject.toml: removed unused setuptools-scm, added `packages = []` to fix editable install
 - README.md tier matrix: Contact Verifier corrected to Pro (was SMB), TMS Sync corrected to Enterprise-only (was SMB)
 - Aligned all SKILL.md metadata versions to 0.1.0 (15 files were incorrectly at 1.0.0)
@@ -24,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed "real-time" claims from api-bridge architecture doc and risk-engine SCHEMA.md
 - Fixed api-bridge README claiming parallel execution (actual design is sequential with rate limiting)
 
-### Changed
+### Additional changes
 - All 5 business cases: "ROI Calculation" renamed to "Efficiency Gains", removed unsupported dollar/percentage claims
 - All 5 PRDs: success metrics prefixed with "Target:" (goals, not measured results)
 - README: replaced "actionable freight intelligence" with "structured carrier data", rewrote architecture note to be factual

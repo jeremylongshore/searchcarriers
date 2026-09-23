@@ -54,7 +54,7 @@ Claude identifies this as a risk assessment request
   |
   +--> Stage 1: Carrier Intel (if carrier data not already in context)
   |    carrier_profile(dot=69494)
-  |    Returns: carrier object (143 fields), authorities, insurances
+  |    Returns: carrier object with selected v3 sections, authorities, insurances
   |
   +--> Stage 2: Risk Engine
   |    risk_score(dot_number="69494", carrier_data={...})

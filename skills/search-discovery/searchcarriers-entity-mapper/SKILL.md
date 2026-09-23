@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-entity-mapper
-description: >-
-  Maps carrier relationships via shared officers, addresses, and equipment.
-  Use when finding related companies or detecting chameleon carriers.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Maps carrier relationships via shared officers, addresses, and equipment. Use when finding related companies or detecting chameleon carriers.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- search-discovery
 ---
 
 # Entity Mapper
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 Motor carriers frequently operate through webs of related entities -- parent companies, subsidiaries, DBAs, predecessor companies, and shared-officer networks. FMCSA data captures fragments of these relationships through 143 carrier fields including company officers, physical addresses, phone numbers, DUNS numbers, DBA names, and equipment registrations. This skill teaches you how to systematically extract these signals, execute targeted searches to find connected entities, and assemble the results into a relationship map that reveals corporate structures, operational dependencies, and potential evasion patterns.
 
@@ -31,7 +36,7 @@ Motor carriers frequently operate through webs of related entities -- parent com
 Every relationship map starts from a seed carrier. Retrieve the full carrier record:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber={dot}" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber={dot}" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -58,7 +63,7 @@ Work through the anchors systematically. Each search type has different signal s
 Company officers are the strongest relationship indicator. For each officer name from the seed:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={officer_name}&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm={officer_name}&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -70,7 +75,7 @@ Filter results to carriers where `company_officers` contains a matching name. An
 Search the base company name without suffixes (LLC, Inc, Corp, Transport, Trucking, Logistics):
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={base_name}&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm={base_name}&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -78,7 +83,7 @@ curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={base_name}&pe
 Also search the DBA name if one exists:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={dba_name}&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm={dba_name}&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -88,7 +93,7 @@ curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={dba_name}&per
 Search by location and then post-filter for address matches:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?city={city}&state={state}&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?addressCity={city}&addressState={state}&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -98,7 +103,7 @@ Post-filter: compare `phy_street` values from results against the seed carrier's
 **Phone Search (medium signal)**
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={phone_digits}&perPage=50" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm={phone_digits}&perPage=50" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -110,7 +115,7 @@ Post-filter results for matching phone numbers. Shared phone numbers between car
 If the seed carrier has equipment data (Pro tier), retrieve VINs and search each:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/company/{dot}/equipment" \
+curl -s "https://searchcarriers.com/api/v3/company/{dot}/equipment" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -118,7 +123,7 @@ curl -s "https://searchcarriers.com/api/v1/company/{dot}/equipment" \
 Then for notable VINs:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?vin={vin}" \
+curl -s "https://searchcarriers.com/api/v1/search/by-vin/{vin}" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -214,7 +219,7 @@ Limit API calls to a reasonable number. For each depth level, prioritize officer
 Step 1 -- Get seed carrier:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -224,7 +229,7 @@ Step 2 -- Extract anchors from seed (officers, address, phone, DBA, DUNS).
 Step 3 -- Search each officer name:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm=John%20Smith&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm=John%20Smith&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -232,7 +237,7 @@ curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm=John%20Smith&p
 Step 4 -- Search base company name:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm=Pacific%20Transport&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm=Pacific%20Transport&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -244,7 +249,7 @@ Step 5 -- Compile results into relationship map table with evidence and confiden
 **User**: "Show me entities connected to Pacific Transport"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm=Pacific%20Transport&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm=Pacific%20Transport&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -264,7 +269,7 @@ Retrieve the seed carrier. Note its creation date, officers, and address. Search
 Retrieve the seed carrier. Extract all names from `company_officers`. For each officer:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?superSearchTerm={officer_name}&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?superSearchTerm={officer_name}&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -276,12 +281,16 @@ Filter to carriers where the officer name appears in `company_officers`. Present
 **User**: "What other carriers operate from 123 Main St, Dallas, TX?"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?city=Dallas&state=TX&perPage=100" \
+curl -s "https://searchcarriers.com/api/v3/search?addressCity=Dallas&addressState=TX&perPage=100" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
 
 Post-filter for results where `phy_street` contains "123 Main". Present all matches, noting which share officers or other attributes beyond just the address.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

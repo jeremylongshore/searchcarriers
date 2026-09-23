@@ -60,7 +60,7 @@ Monitoring: Active -- alerts will be generated for status changes,
             insurance lapses, safety rating changes, and OOS orders.
 ```
 
-After confirmation, suggest: "Run `/sc-alerts` to view alerts for this carrier."
+After confirmation, suggest using the configured SearchCarriers notification channel or running `monitor_compliance` for a current-state review.
 
 ### Remove Confirmation
 
@@ -85,7 +85,7 @@ Total monitored: {count}
 | 3 | 3456789 | ROAD RUNNER TRANSPORT | ACTIVE | 2025-12-10 | 5            |
 ```
 
-After the list, suggest: "Run `/sc-alerts --carrier {DOT}` to view alerts for a specific carrier."
+After the list, suggest running `monitor_compliance` for a specific DOT when a current-state review is needed.
 
 If the watch list is empty, display: "No carriers on the watch list. Run `/sc-watch add {DOT}` to start monitoring a carrier."
 

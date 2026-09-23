@@ -7,7 +7,6 @@ is not installed (e.g. in minimal CI environments).
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -51,8 +50,7 @@ def render_pdf(template_name: str, context: dict[str, Any], output_path: Path | 
         from weasyprint import HTML
     except ImportError:
         raise RuntimeError(
-            "weasyprint is required for PDF rendering. "
-            "Install with: pip install weasyprint>=62.0"
+            "weasyprint is required for PDF rendering. Install with: pip install weasyprint>=62.0"
         )
 
     env = Environment(

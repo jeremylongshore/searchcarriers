@@ -1,21 +1,26 @@
 ---
 name: searchcarriers-data-exporter
-description: >-
-  Exports carrier data as CSV, JSON, markdown, or comparison tables with
-  configurable fields. Use when exporting or formatting carrier data.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Exports carrier data as CSV, JSON, markdown, or comparison tables with configurable fields. Use when exporting or formatting carrier data.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- operations
 ---
 
 # Data Exporter
 
 ## Overview
 
-Raw API responses contain 143 fields per carrier in nested JSON -- useful for machines, not for operations teams who need to drop data into spreadsheets, share reports with brokers, or compare carriers side-by-side for lane awards. This skill transforms SearchCarriers API data into clean, formatted output files: flat CSVs for spreadsheet workflows, filtered JSON for downstream integrations, markdown reports for documentation, and comparison tables for decision-making. It handles field selection, data cleaning, multi-carrier aggregation, and related data inclusion (inspections, insurance, authority).
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
+
+Raw API responses contain selectable v3 company sections in nested JSON -- useful for machines, not for operations teams who need to drop data into spreadsheets, share reports with brokers, or compare carriers side-by-side for lane awards. This skill transforms SearchCarriers API data into clean, formatted output files: flat CSVs for spreadsheet workflows, filtered JSON for downstream integrations, markdown reports for documentation, and comparison tables for decision-making. It handles field selection, data cleaning, multi-carrier aggregation, and related data inclusion (inspections, insurance, authority).
 
 ## Prerequisites
 
@@ -43,7 +48,7 @@ Parse the user's request to identify:
 **Single carrier:**
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -77,7 +82,7 @@ curl -s "https://searchcarriers.com/api/v1/company/12345/authorities" \
 
 ### 3. Field Selection
 
-The carrier object contains 143 fields. Group them into selectable categories so users do not need to know field names:
+The v3 company response contains selectable nested sections. Group them into selectable categories so users do not need to know field names:
 
 **Identity fields:**
 `dot_number`, `legal_name`, `dba_name`, `mc_mx_ff_number`, `entity_type`, `operating_status`, `out_of_service_date`, `duns_number`
@@ -194,7 +199,7 @@ Generate a formatted carrier profile report in markdown:
 | Field | Value |
 |---|---|
 | Phone | (555) 123-4567 |
-| Email | dispatch@acmetrucking.com |
+| Email | dispatch@example.invalid |
 | Physical Address | 123 Main St, Dallas, TX 75201 |
 | Mailing Address | PO Box 456, Dallas, TX 75201 |
 
@@ -356,7 +361,7 @@ After writing, offer follow-up actions:
 **User**: "Export DOT 12345 to CSV"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -381,7 +386,7 @@ Build a side-by-side comparison table. Present it inline and write the markdown 
 
 ```bash
 # Fetch carrier data
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 
@@ -411,6 +416,10 @@ Filter each carrier object to only: `legal_name`, `dot_number`, `phone`, `email_
 
 Fetch full carrier data, build the markdown report template from section 6, write to `./sc-export-{timestamp}.md`, and display the report inline.
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | HTTP Status | Meaning | Action |
@@ -436,8 +445,8 @@ Fetch full carrier data, build the markdown report template from section 6, writ
 
 - SearchCarriers API documentation: `https://searchcarriers.com/docs`
 - Export endpoint: `GET /api/v1/export` accepts `dot_numbers[]` (array) and `file_format` (string)
-- Search endpoint: `GET /api/v1/search` accepts `dotNumber`, `mcNumber`, `legalName`, etc.
-- Carrier object: 143 fields spanning identity, contact, fleet, safety, insurance, and cargo
+- Search endpoint: `GET /api/v3/search` accepts `dotNumber`, `docketNumber`, `superSearchTerm`, and current v3 filters.
+- Company data: selectable v3 sections spanning contact, operations, safety, insurance, equipment, and risk
 - Rate limit: approximately 3 requests per second; cache TTL is 5 minutes
 - Carrier object field reference: `{baseDir}/docs/carrier-fields.md`
 - Related skill: `searchcarriers-bulk-processor` for batch input handling

@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-tms-connector
-description: >-
-  Formats carrier data for TMS imports mapping fields to TMW, McLeod, and
-  MercuryGate formats. Use when preparing carrier data for TMS onboarding.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Formats carrier data for TMS imports mapping fields to TMW, McLeod, and MercuryGate formats. Use when preparing carrier data for TMS onboarding.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: enterprise
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- operations
 ---
 
 # TMS Connector
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 Transportation Management Systems are the operational backbone of freight brokerages, 3PLs, and shippers. Every TMS maintains a carrier master file, and keeping that file current is a constant manual burden -- new carrier onboarding, quarterly re-verification, insurance updates, and authority status changes. This skill bridges SearchCarriers API data and TMS carrier record formats. It fetches carrier data, maps fields to the conventions of major TMS platforms, generates import-ready files, and provides guidance on the onboarding workflow. This is a helper skill -- it prepares data for import. Actual TMS API integration requires TMS-specific credentials which are outside scope.
 
@@ -49,7 +54,7 @@ If the user does not specify a platform, use the Generic format and note which f
 Retrieve the full carrier record:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -312,7 +317,7 @@ The standard carrier onboarding process for TMS integration follows this sequenc
 **Step 1: Carrier Lookup**
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
+curl -s "https://searchcarriers.com/api/v3/search?dotNumber=12345" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -434,59 +439,13 @@ Data Freshness Warnings:
 
 ## Examples
 
-### Example 1: Format for McLeod
+Read `{baseDir}/references/examples.md` for the detailed single-carrier, batch, and exception scenarios. The examples use synthetic identifiers.
 
-**User**: "Format DOT 12345 for McLeod import"
+## Output
 
-```bash
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
-  -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  -H "Accept: application/json"
-```
-
-Map fields to McLeod format, generate CSV, report the output path. Include a note about where in McLeod to import the file (Carrier Maintenance > Import Carrier Records).
-
-### Example 2: Generic TMS Import
-
-**User**: "Build a carrier import CSV for our TMS"
-
-Ask which carriers (DOT numbers) and which TMS platform. If platform is unknown, use the generic format. Fetch carrier data, generate the CSV, and list the included fields so the user can verify column mapping.
-
-### Example 3: TMS Platform Field Guidance
-
-**User**: "What fields does TMW need for carrier onboarding?"
-
-Present the TMW field mapping table from section 3. Explain which fields are required vs. optional. Note any fields that SearchCarriers provides that TMW does not natively support (these can be added as custom fields in TMW).
-
-### Example 4: Batch Carrier Onboarding
-
-**User**: "Onboard these carriers into our TMS: DOTs 12345, 67890, 11111, 22222"
-
-```bash
-curl -s "https://searchcarriers.com/api/v1/export?dot_numbers[]=12345&dot_numbers[]=67890&dot_numbers[]=11111&dot_numbers[]=22222&file_format=json" \
-  -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  -H "Accept: application/json"
-```
-
-Run vetting on each carrier, classify results, generate import file for approved carriers, and present the batch summary.
-
-### Example 5: Carrier Update Sync
-
-**User**: "Check if DOT 12345 has changed since we last synced"
-
-```bash
-# Fetch current data
-curl -s "https://searchcarriers.com/api/v1/search?dotNumber=12345" \
-  -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  -H "Accept: application/json"
-
-# Check watch status
-curl -s "https://searchcarriers.com/api/v1/company/12345/watch" \
-  -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  -H "Accept: application/json"
-```
-
-Present current data and ask the user what their TMS currently shows. Diff the two and generate an update file if needed. Recommend adding to watchlist if not already watched.
+Return the requested TMS-ready CSV or JSON payload, an explicit field-mapping
+summary, vetting disposition, freshness warnings, and any rows that require
+manual completion. Never persist raw SearchCarriers API responses.
 
 ## Error Handling
 

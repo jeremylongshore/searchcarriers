@@ -57,7 +57,7 @@ MCP Server: carrier_lookup(search_term="JB Hunt")
   |
   +--> Auto-detect search type: "JB Hunt" is not DOT/MC/VIN -> use superSearchTerm
   |
-  +--> HTTP GET https://searchcarriers.com/api/v1/search?superSearchTerm=JB+Hunt
+  +--> HTTP GET https://searchcarriers.com/api/v3/search?superSearchTerm=JB+Hunt
   |
   +--> Parse response: extract carrier records from paginated result
   |
@@ -80,7 +80,7 @@ MCP Server: carrier_profile(dot_number="69494")
   |
   +--> Tier check: is user's tier >= free? (yes)
   |
-  +--> HTTP GET /search?dotNumber=69494              --> carrier data (143 fields)
+  +--> HTTP GET /search?dotNumber=69494              --> carrier data with selected v3 sections
   +--> HTTP GET /company/69494/authorities           --> authority records
   +--> HTTP GET /company/69494/insurances            --> insurance records
   |
@@ -126,11 +126,10 @@ User receives: formatted vetting report with carrier details, risk scores, and r
 
 | Endpoint | Method | Used By | Purpose |
 |----------|--------|---------|---------|
-| `/api/v1/search` | GET | `carrier_lookup`, `carrier_profile`, `entity_map` | Search carriers by DOT, MC, name, VIN, or filters |
-| `/api/v1/company/{dot}/authorities` | GET | `carrier_profile` | Retrieve broker/contract/common authority status |
-| `/api/v1/company/{dot}/insurances` | GET | `carrier_profile` | Retrieve insurance records and coverage |
-| `/api/v1/company/{dot}/equipment` | GET | `entity_map`, `fleet_summary` | Detailed equipment roster with VINs |
-| `/api/v1/company/{dot}/vehicles` | GET | `fleet_summary` | Simplified vehicle list |
+| `/api/v3/search` | GET | `carrier_lookup` | Search carriers by DOT, docket, name, or location filters |
+| `/api/v3/company/{dot}` | GET | `carrier_profile`, `entity_map` | Retrieve selected company sections |
+| `/api/v1/search/by-vin/{vin}` | GET | `entity_map` | Resolve carrier relationships for a VIN |
+| `/api/v3/company/{dot}/equipment` | GET | `entity_map`, `fleet_summary` | Current equipment roster with VINs |
 
 All endpoints use GET method, accept `Authorization: Bearer {token}` header, and return JSON with Laravel-standard pagination where applicable.
 
@@ -138,7 +137,7 @@ All endpoints use GET method, accept `Authorization: Bearer {token}` header, and
 
 **API key handling:**
 - API key is stored in the `SEARCHCARRIERS_API_KEY` environment variable
-- The MCP server reads this at startup; if missing, the server fails with a clear error message directing the user to `https://searchcarriers.com/settings/api`
+- The MCP server reads this at startup; if missing, the server fails with a clear error message directing the user to `https://searchcarriers.com/settings/api-tokens`
 - The key is passed as a Bearer token in the Authorization header on every API request
 - The key is never logged, never written to disk, never included in tool output
 
@@ -161,8 +160,8 @@ All endpoints use GET method, accept `Authorization: Bearer {token}` header, and
 
 | Error | HTTP Code | User Message | Recovery Action |
 |-------|----------|-------------|----------------|
-| API key not set | N/A (startup) | "SEARCHCARRIERS_API_KEY not set. Get your key at https://searchcarriers.com/settings/api" | Block all tool calls until key is configured |
-| Invalid API key | 401 | "Invalid API key. Verify your key at https://searchcarriers.com/settings/api" | No retry -- user must fix key |
+| API key not set | N/A (startup) | "SEARCHCARRIERS_API_KEY not set. Get your key at https://searchcarriers.com/settings/api-tokens" | Block all tool calls until key is configured |
+| Invalid API key | 401 | "Invalid API key. Verify your key at https://searchcarriers.com/settings/api-tokens" | No retry -- user must fix key |
 | Insufficient tier | 403 | "entity_map requires Pro tier. Your tier: Free. Upgrade at https://searchcarriers.com/pricing" | No retry -- show upgrade path |
 | Carrier not found | 404 | "No carrier found for DOT 99999999. Try searching by name with carrier_lookup." | Suggest alternative search |
 | Rate limited | 429 | "Rate limit reached. Retrying in {n} seconds..." | Respect `Retry-After` header, retry up to 3 times with exponential backoff |

@@ -23,8 +23,6 @@ _PLUGIN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
-
 # ---------------------------------------------------------------------------
 # MCP SDK
 # ---------------------------------------------------------------------------
@@ -32,10 +30,19 @@ from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
+from plugins.shared.api_contract import (  # noqa: E402
+    API_V1_BASE,
+    API_V3_BASE,
+    company_fields,
+    data_list,
+    normalize_v3_company,
+    v3_search_params,
+)
+from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-API_BASE = "https://searchcarriers.com/api/v1"
 REQUEST_TIMEOUT = 15.0  # seconds
 SCAC_PATTERN_MAX = 4
 VIN_LENGTH = 17
@@ -76,32 +83,28 @@ def _detect_search_type(query: str) -> tuple[str, str]:
 
     Resolution order
     ----------------
-    1. Pure digits                 -> dotNumber
-    2. Starts with "MC" (case-ins) -> mcNumber  (strip the "MC" prefix)
+    1. Pure digits                 -> dot
+    2. Starts with "MC" (case-ins) -> mc  (strip the "MC" prefix)
     3. 17-char alphanumeric        -> vin
     4. 2-4 uppercase letters       -> SCAC endpoint (separate handling)
-    5. Fallback                    -> superSearchTerm
+    5. Fallback                    -> text
     """
     stripped = query.strip()
     upper = stripped.upper()
 
     if stripped.isdigit():
-        return ("dotNumber", stripped)
+        return ("dot", stripped)
 
     if upper.startswith("MC") and upper[2:].isdigit():
-        return ("mcNumber", stripped[2:])  # API expects the numeric portion
+        return ("mc", stripped[2:])
 
     if len(stripped) == VIN_LENGTH and stripped.isalnum():
         return ("vin", stripped)
 
-    if (
-        2 <= len(stripped) <= SCAC_PATTERN_MAX
-        and stripped.isalpha()
-        and stripped.isupper()
-    ):
+    if 2 <= len(stripped) <= SCAC_PATTERN_MAX and stripped.isalpha() and stripped.isupper():
         return ("scac", stripped)
 
-    return ("superSearchTerm", stripped)
+    return ("text", stripped)
 
 
 async def _get(
@@ -128,9 +131,7 @@ async def _get(
     # Surface the Retry-After header when rate-limited.
     if response.status_code == 429:
         retry_after = response.headers.get("Retry-After", "unknown")
-        raise RuntimeError(
-            f"Rate limit hit (429). Retry after {retry_after} seconds."
-        )
+        raise RuntimeError(f"Rate limit hit (429). Retry after {retry_after} seconds.")
 
     status_messages = {
         401: "Invalid or missing API key (401). Check SEARCHCARRIERS_API_KEY.",
@@ -162,45 +163,44 @@ async def _carrier_lookup(arguments: dict[str, Any], api_key: str) -> dict[str, 
     page: int = int(arguments.get("page", 1))
     per_page: int = int(arguments.get("per_page", 10))
 
-    # Determine query parameter name and value.
+    # Determine the semantic search type. v3 uses docketNumber for MC/MX/FF
+    # searches and silently ignores the old mcNumber parameter.
     if search_type in ("auto", "") or search_type is None:
-        param_name, param_value = _detect_search_type(query)
-    elif search_type == "dot":
-        param_name, param_value = "dotNumber", query
-    elif search_type == "mc":
-        param_name, param_value = "mcNumber", query
-    elif search_type == "name":
-        param_name, param_value = "legalName", query
-    elif search_type == "scac":
-        param_name, param_value = "scac", query
-    elif search_type == "vin":
-        param_name, param_value = "vin", query
+        resolved_type, param_value = _detect_search_type(query)
+    elif search_type in {"dot", "mc", "name", "scac", "vin"}:
+        resolved_type, param_value = search_type, query
     else:
-        param_name, param_value = "superSearchTerm", query
+        resolved_type, param_value = "text", query
 
-    # SCAC uses a dedicated endpoint.
-    if param_name == "scac":
-        url = f"{API_BASE}/search/scac"
+    # SCAC and VIN retain their documented v1 dedicated routes. Both APIs
+    # silently ignore a vin query parameter on /search, so the path form is
+    # required for correct results.
+    if resolved_type == "scac":
+        url = f"{API_V1_BASE}/search/scac"
         params: dict[str, Any] = {"scac": param_value}
+    elif resolved_type == "vin":
+        url = f"{API_V1_BASE}/search/by-vin/{param_value}"
+        params = {}
     else:
-        url = f"{API_BASE}/search"
-        params = {param_name: param_value, "page": page, "per_page": per_page}
+        url = f"{API_V3_BASE}/search"
+        params = v3_search_params(
+            param_value,
+            resolved_type,
+            page=page,
+            per_page=per_page,
+            state=state,
+            city=city,
+        )
 
-    if state:
-        params["state"] = state.upper()
-    if city:
-        params["city"] = city
-
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         try:
             data = await _get(client, url, params=params)
         except RuntimeError as exc:
             return _error_payload("api_error", str(exc))
 
     return {
-        "search_type_used": param_name,
+        "api_version": "v1" if resolved_type in {"scac", "vin"} else "v3",
+        "search_type_used": resolved_type,
         "query": query,
         "page": page,
         "per_page": per_page,
@@ -209,43 +209,40 @@ async def _carrier_lookup(arguments: dict[str, Any], api_key: str) -> dict[str, 
 
 
 async def _carrier_profile(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
-    """Combine search, authority, and insurance data into one carrier profile.
-
-    All three API calls run in parallel via ``asyncio.gather``.
-    """
+    """Fetch one v3 company document with the profile field sections."""
     dot: str = str(arguments["dot_number"]).strip()
 
-    search_url = f"{API_BASE}/search"
-    authorities_url = f"{API_BASE}/company/{dot}/authorities"
-    insurances_url = f"{API_BASE}/company/{dot}/insurances"
-
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        search_task = _get(client, search_url, params={"dotNumber": dot})
-        authorities_task = _get(client, authorities_url)
-        insurances_task = _get(client, insurances_url)
-
-        results = await asyncio.gather(
-            search_task, authorities_task, insurances_task, return_exceptions=True
-        )
-
-    search_result, authorities_result, insurances_result = results
-
-    def _unwrap(result: Any, label: str) -> Any:
-        if isinstance(result, Exception):
-            return _error_payload("api_error", f"{label}: {result}")
-        return result
-
-    carrier_data = _unwrap(search_result, "carrier search")
-    authorities_data = _unwrap(authorities_result, "authorities")
-    insurances_data = _unwrap(insurances_result, "insurances")
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        try:
+            raw = await _get(
+                client,
+                f"{API_V3_BASE}/company/{dot}",
+                params=company_fields(
+                    "contact",
+                    "safety",
+                    "oos_percents",
+                    "authorities",
+                    "insurance",
+                    "operation",
+                    "service_areas",
+                    "risk_factors",
+                    "basic_scores",
+                    "vetting_report",
+                ),
+            )
+            carrier_data = normalize_v3_company(raw)
+        except (RuntimeError, ValueError) as exc:
+            return _error_payload("api_error", str(exc))
 
     return {
+        "api_version": "v3",
         "dot_number": dot,
         "carrier": carrier_data,
-        "authorities": authorities_data,
-        "insurances": insurances_data,
+        "authorities": {"data": carrier_data.get("authorities", [])},
+        "insurances": {"data": carrier_data.get("insurance", [])},
+        "safety": carrier_data.get("safety"),
+        "risk_factors": carrier_data.get("risk_factors", []),
+        "vetting_report": carrier_data.get("vetting_report"),
     }
 
 
@@ -261,14 +258,12 @@ async def _entity_map(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     """
     dot: str = str(arguments["dot_number"]).strip()
 
-    search_url = f"{API_BASE}/search"
-    equipment_url = f"{API_BASE}/company/{dot}/equipment"
+    company_url = f"{API_V3_BASE}/company/{dot}"
+    equipment_url = f"{API_V3_BASE}/company/{dot}/equipment"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
         # Step 1 & 2: seed carrier + equipment in parallel.
-        seed_task = _get(client, search_url, params={"dotNumber": dot})
+        seed_task = _get(client, company_url)
         equipment_task = _get(client, equipment_url)
 
         seed_result, equipment_result = await asyncio.gather(
@@ -281,10 +276,10 @@ async def _entity_map(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
             return _error_payload("api_error", f"Equipment fetch failed: {equipment_result}")
 
         # Extract VINs from the equipment payload.
-        equipment_list: list[dict[str, Any]] = (
-            equipment_result if isinstance(equipment_result, list)
-            else equipment_result.get("data", equipment_result.get("results", []))
-        )
+        try:
+            equipment_list = data_list(equipment_result)
+        except ValueError as exc:
+            return _error_payload("contract_error", str(exc))
         seen_vins: set[str] = set()
         for item in equipment_list:
             vin = item.get("vin") or item.get("VIN") or item.get("vehicleIdentificationNumber")
@@ -301,10 +296,7 @@ async def _entity_map(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
             }
 
         # Step 3: VIN searches in parallel (bounded by asyncio.gather).
-        vin_tasks = {
-            vin: _get(client, search_url, params={"vin": vin})
-            for vin in seen_vins
-        }
+        vin_tasks = {vin: _get(client, f"{API_V1_BASE}/search/by-vin/{vin}") for vin in seen_vins}
         vin_results: dict[str, Any] = {}
         for vin, coro in vin_tasks.items():
             try:
@@ -317,23 +309,25 @@ async def _entity_map(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
     for vin, result in vin_results.items():
         if "error" in result:
             continue
-        carriers_from_vin: list[dict[str, Any]] = (
-            result if isinstance(result, list)
-            else result.get("data", result.get("results", []))
-        )
+        try:
+            carriers_from_vin = data_list(result)
+        except ValueError:
+            continue
         for carrier in carriers_from_vin:
             carrier_dot = str(
-                carrier.get("dotNumber")
-                or carrier.get("dot_number")
-                or carrier.get("dot")
-                or ""
+                carrier.get("dotNumber") or carrier.get("dot_number") or carrier.get("dot") or ""
             )
             if not carrier_dot or carrier_dot == dot:
                 continue  # Skip the seed carrier itself.
             if carrier_dot not in related:
                 related[carrier_dot] = {
                     "dot": carrier_dot,
-                    "name": carrier.get("legalName") or carrier.get("name") or "",
+                    "name": (
+                        carrier.get("legal_name")
+                        or carrier.get("legalName")
+                        or carrier.get("name")
+                        or ""
+                    ),
                     "shared_vins": [],
                 }
             related[carrier_dot]["shared_vins"].append(vin)
@@ -347,60 +341,32 @@ async def _entity_map(arguments: dict[str, Any], api_key: str) -> dict[str, Any]
 
 
 async def _fleet_summary(arguments: dict[str, Any], api_key: str) -> dict[str, Any]:
-    """Return a combined fleet overview from the equipment and vehicles endpoints.
-
-    Both calls run in parallel; the summary section tallies totals and
-    aggregates equipment types for a quick overview without needing to parse
-    the full lists.
-    """
+    """Return the current v3 equipment roster and an aggregate summary."""
     dot: str = str(arguments["dot_number"]).strip()
 
-    equipment_url = f"{API_BASE}/company/{dot}/equipment"
-    vehicles_url = f"{API_BASE}/company/{dot}/vehicles"
+    equipment_url = f"{API_V3_BASE}/company/{dot}/equipment"
 
-    async with httpx.AsyncClient(
-        headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT
-    ) as client:
-        equipment_task = _get(client, equipment_url)
-        vehicles_task = _get(client, vehicles_url)
-
-        equipment_result, vehicles_result = await asyncio.gather(
-            equipment_task, vehicles_task, return_exceptions=True
-        )
-
-    def _to_list(result: Any, label: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        """Normalise an API result to a list; return (list, error_or_None)."""
-        if isinstance(result, Exception):
-            return [], _error_payload("api_error", f"{label}: {result}")
-        if isinstance(result, list):
-            return result, None
-        # Unwrap common envelope shapes.
-        for key in ("data", "results", "items"):
-            if key in result:
-                return result[key], None
-        return [], None
-
-    equipment_list, equipment_err = _to_list(equipment_result, "equipment")
-    vehicles_list, vehicles_err = _to_list(vehicles_result, "vehicles")
+    async with httpx.AsyncClient(headers=_auth_headers(api_key), timeout=REQUEST_TIMEOUT) as client:
+        try:
+            equipment_result = await _get(client, equipment_url)
+            equipment_list = data_list(equipment_result)
+        except (RuntimeError, ValueError) as exc:
+            return _error_payload("api_error", f"equipment: {exc}")
 
     # Aggregate equipment types for the summary.
     type_counts: dict[str, int] = {}
     for item in equipment_list:
         eq_type = (
-            item.get("equipmentType")
-            or item.get("equipment_type")
-            or item.get("type")
-            or "unknown"
+            item.get("equipmentType") or item.get("equipment_type") or item.get("type") or "unknown"
         )
         type_counts[str(eq_type)] = type_counts.get(str(eq_type), 0) + 1
 
     payload: dict[str, Any] = {
         "dot_number": dot,
-        "equipment": equipment_list if not equipment_err else equipment_err,
-        "vehicles": vehicles_list if not vehicles_err else vehicles_err,
+        "api_version": "v3",
+        "equipment": equipment_list,
         "summary": {
             "total_equipment": len(equipment_list),
-            "total_vehicles": len(vehicles_list),
             "types": type_counts,
         },
     }
@@ -465,8 +431,8 @@ _TOOL_DEFINITIONS: list[Tool] = [
         name="carrier_profile",
         description=(
             "Fetch a full carrier profile by DOT number. Combines the base carrier "
-            "record with operating authority status and insurance records into a single "
-            "response. Makes three parallel API calls. Min tier: free."
+            "record with current safety, authority, insurance, operation, risk, BASIC, "
+            "and qualification sections in one API v3 request. Min tier: free."
         ),
         inputSchema={
             "type": "object",
@@ -500,8 +466,8 @@ _TOOL_DEFINITIONS: list[Tool] = [
     Tool(
         name="fleet_summary",
         description=(
-            "Return the equipment roster and vehicle list for a carrier, plus an "
-            "aggregated summary of total counts and equipment types. Min tier: free."
+            "Return the API v3 equipment roster for a carrier, plus an aggregated "
+            "summary of total counts and equipment types. Min tier: free."
         ),
         inputSchema={
             "type": "object",

@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-fleet-risk-dashboard
-description: >-
-  Weekly fleet-wide risk analysis across all watched carriers with trend
-  tracking and executive summary. Use when assessing fleet risk.
-allowed-tools: "Read,Grep,Bash(python:*)"
+description: Weekly fleet-wide risk analysis across all watched carriers with trend tracking and executive summary. Use when assessing fleet risk.
+allowed-tools: Read,Grep,Bash(python:*)
 metadata:
-  author: Jeremy Longshore <jeremy@intentsolutions.io>
-  version: 0.1.0
-  license: BUSL-1.1
   tier: enterprise
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- workflow
 ---
 
 # Fleet Risk Dashboard -- Workflow Skill
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 This workflow orchestrates a fleet-wide risk analysis across all carriers on the Watchdog watch list, producing an executive dashboard with risk distribution, trend tracking, and actionable summaries. It coordinates all four stackable plugins plus Watchdog: Carrier Intel (carrier profiles), Risk Engine (scoring), Ops Reporter (reports and comparisons), and Watchdog (watch list and compliance drift).
 
@@ -68,21 +73,11 @@ Call `manage_watchlist` from the Watchdog plugin with `action: "list"` to retrie
 |-------|--------|---------|
 | DOT number | Watchlist entry | Primary identifier for all downstream calls |
 | Legal name | Watchlist entry | Display in dashboard |
-| Monitoring state | Watchlist entry | Filter out PAUSED and STALE carriers |
-| Watch start date | Watchlist entry | Calculate monitoring duration |
-| Alert count | Watchlist entry | Recent alert activity indicator |
-| Last check timestamp | Watchlist entry | Data freshness indicator |
+| Watch ID | Watchlist entry | Trace the configured watch |
 
-**Filtering rules:**
-
-| State | Include | Rationale |
-|-------|---------|-----------|
-| ACTIVE | Yes | Currently monitored; include in analysis |
-| BASELINE | Yes | Newly added; include to establish first risk score |
-| PAUSED | No | User has intentionally paused monitoring |
-| STALE | Flag | Include in dashboard but mark as "stale data -- last check failed" |
-
-Report the watch list summary before proceeding: total carriers, active count, paused count, stale count.
+Process every carrier returned by `manage_watchlist`. Do not infer monitoring
+states, watch dates, alert counts, or baseline status. Report the total carrier
+count before proceeding.
 
 ### Stage 2: Carrier Profiling and Risk Scoring
 
@@ -235,7 +230,7 @@ Generate a prioritized action list derived from the dashboard analysis:
 | HIGH | Investigate insurance concerns | DOTs with insurance factor > 50 | 7 days |
 | HIGH | Address OOS rate trends | DOTs with OOS factor > national avg | 7 days |
 | MEDIUM | Follow up on REVIEW-status carriers | DOTs at MEDIUM risk | Next cycle |
-| LOW | Refresh stale monitoring data | DOTs with STALE state | Next cycle |
+| LOW | Refresh current evidence | DOTs with incomplete noncritical data | Next cycle |
 
 ### Stage 6: Dashboard Distribution
 
@@ -271,13 +266,13 @@ Safety director requests the weekly fleet dashboard.
 
 New Enterprise customer runs their first fleet dashboard with 12 watched carriers.
 
-1. `manage_watchlist` returns 12 active carriers, all in BASELINE state.
+1. `manage_watchlist` returns 12 watched carriers.
 2. `carrier_profile` and `risk_score` for all 12. All succeed.
 3. `generate_fleet`: 428 total power units.
 4. `generate_compare` for top 5 riskiest.
 5. Dashboard assembled with all sections except trends: "Trend data unavailable -- first dashboard run."
 6. Action items generated from current state analysis.
-7. Dashboard distributed. This run establishes the trend baseline for next week.
+7. Dashboard distributed as a point-in-time report. Any trend baseline must be stored and compared by the calling application.
 
 ### Example 3: Dashboard with Compliance Concerns
 
@@ -289,6 +284,10 @@ Dashboard reveals fleet-wide compliance currency deterioration.
 4. Trend vs. last week: Compliance Currency factor worsened by 8 points.
 5. Action items include: "CRITICAL: 18 carriers have overdue MCS-150 filings. Contact carriers to file biennial updates or risk FMCSA penalties."
 6. Top 5 comparison highlights that 3 of the riskiest carriers share compliance as their top risk factor.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 
@@ -308,7 +307,7 @@ Dashboard reveals fleet-wide compliance currency deterioration.
 
 ## Resources
 
-- Watchdog plugin tools: `manage_watchlist`, `get_alerts`, `route_alert` -- `{baseDir}/plugins/searchcarriers-watchdog/SCHEMA.md`
+- Watchdog plugin tools: `manage_watchlist`, `monitor_compliance`, `route_alert` -- `{baseDir}/plugins/searchcarriers-watchdog/SCHEMA.md`
 - Carrier Intel plugin tools: `carrier_profile` -- `{baseDir}/plugins/searchcarriers-carrier-intel/SCHEMA.md`
 - Risk Engine plugin tools: `risk_score` -- `{baseDir}/plugins/searchcarriers-risk-engine/SCHEMA.md`
 - Ops Reporter plugin tools: `generate_fleet`, `generate_compare` -- `{baseDir}/plugins/searchcarriers-ops-reporter/SCHEMA.md`

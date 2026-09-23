@@ -45,7 +45,7 @@ searchcarriers-watchdog/
 | Tool | Purpose | Min Tier | Status |
 |------|---------|----------|--------|
 | manage_watchlist | Watch list CRUD (add/remove/list) | proplus | ✅ |
-| get_alerts | Pull recent change alerts | proplus | ✅ |
+| get_alerts | Report that no published alert-feed route is available | proplus | ✅ |
 | route_alert | Format alerts for Slack/Telegram/email/webhook | proplus | ✅ |
 | monitor_compliance | Compliance drift detection | proplus | ✅ |
 
@@ -54,7 +54,7 @@ searchcarriers-watchdog/
 | Command | Purpose | Status |
 |---------|---------|--------|
 | /sc-watch | Watch list management | ✅ |
-| /sc-alerts | View and route alerts | ✅ |
+| /sc-alerts | Explain alert availability or format a supplied event | ✅ |
 
 ## Skills
 

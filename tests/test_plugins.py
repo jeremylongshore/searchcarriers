@@ -1,10 +1,6 @@
 """Validate all plugin structures and configurations."""
 
 import json
-from pathlib import Path
-
-import pytest
-
 
 REQUIRED_PLUGIN_FIELDS = ["name", "description"]
 TIER_VALUES = {"free", "basic", "pro", "proplus", "smb", "enterprise"}
@@ -37,8 +33,9 @@ class TestPluginJson:
         for pj in all_plugin_jsons:
             data = json.loads(pj.read_text())
             name = data.get("name", "")
-            assert name.startswith("searchcarriers-"), \
+            assert name.startswith("searchcarriers-"), (
                 f"{pj}: Plugin name must start with 'searchcarriers-'"
+            )
 
 
 class TestPluginStructure:
@@ -68,11 +65,11 @@ class TestTierGating:
             data = json.loads(pj.read_text())
             # Plugin-level tier
             plugin_tier = data.get("min_tier", "free")
-            assert plugin_tier in TIER_VALUES, \
-                f"{pj}: Invalid plugin tier '{plugin_tier}'"
+            assert plugin_tier in TIER_VALUES, f"{pj}: Invalid plugin tier '{plugin_tier}'"
             # Per-tool tiers (tools is a list of dicts)
             tools = data.get("tools", [])
             for tool in tools:
                 tier = tool.get("min_tier", "free")
-                assert tier in TIER_VALUES, \
+                assert tier in TIER_VALUES, (
                     f"{pj}: Invalid tier '{tier}' for tool '{tool.get('name', '?')}'"
+                )

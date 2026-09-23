@@ -12,7 +12,7 @@
 ## Prerequisites
 
 - [ ] SearchCarriers account with Pro+ tier -- upgrade at [searchcarriers.com/pricing](https://searchcarriers.com/pricing)
-- [ ] API key generated at [searchcarriers.com/settings/api](https://searchcarriers.com/settings/api)
+- [ ] API key generated at [searchcarriers.com/settings/api-tokens](https://searchcarriers.com/settings/api-tokens)
 - [ ] API key set in environment: `export SEARCHCARRIERS_API_KEY="your_id|your_token"`
 - [ ] Claude Code installed with MCP support
 - [ ] Watchdog plugin installed: copy `searchcarriers-watchdog/` to `.claude/plugins/` or configure in `.mcp.json`
@@ -30,7 +30,7 @@ Add DOT 69494 to my watch list
 **What happens behind the scenes:**
 1. Claude invokes `manage_watchlist` with `action="add"` and `dot_number="69494"`
 2. The MCP server checks tier: user must be Pro+
-3. API call: `POST /api/v1/carrier-watch` with body `{ "dot_number": "69494" }`
+3. API call: `POST /api/v1/company/69494/watch` with body `{ "watch_types": ["all"] }`
 4. Carrier Watch API confirms the addition and returns carrier details
 
 **Expected output:**
@@ -76,7 +76,7 @@ Show me my carrier watch list
 
 **What happens behind the scenes:**
 1. Claude invokes `manage_watchlist` with `action="list"`
-2. API call: `GET /api/v1/carrier-watch`
+2. API call: `GET /api/v1/company/watch`
 3. Returns all watched carriers with details
 
 **Expected output:**
@@ -113,7 +113,7 @@ Any alerts on my watched carriers in the last 24 hours?
 
 **What happens behind the scenes:**
 1. Claude invokes `get_alerts` with `hours=24`
-2. API call: `GET /api/v1/carrier-watch/alerts?hours=24`
+2. `get_alerts` returns `endpoint_unavailable`; the published API has no alert-feed route.
 3. Returns alerts sorted by severity and timestamp
 
 **Expected output:**
@@ -277,7 +277,7 @@ Show me the compliance drift for DOT 3456789 over the last 6 months
 
 **What happens behind the scenes:**
 1. Claude invokes `monitor_compliance` with `dot_number="3456789"` and `days=180`
-2. API call: `GET /api/v1/carrier-watch/history?dot=3456789&days=180`
+2. Fetch current company, authority, and insurance data for DOT 3456789.
 3. Drift analyzer categorizes each change event and computes the trend
 
 **Expected output:**
@@ -486,7 +486,7 @@ SearchCarriers API key is not configured.
 
 To set up your API key:
 1. Sign up or log in at https://searchcarriers.com
-2. Go to Settings > API (https://searchcarriers.com/settings/api)
+2. Go to Settings > API (https://searchcarriers.com/settings/api-tokens)
 3. Generate a new API token
 4. Set the environment variable:
 
@@ -534,10 +534,10 @@ CARRIER WATCH ALERTS (last 24 hours)
 ## FAQ
 
 **Q: How often does Watchdog check for changes?**
-A: Watchdog does not poll automatically. It checks for alerts when you ask (`get_alerts`). The SearchCarriers Carrier Watch system monitors your watched carriers server-side with nightly FMCSA data syncs. When you call `get_alerts`, you are retrieving changes that the server has already detected and stored. Think of it as checking your mailbox, not waiting by the door.
+A: Watchdog does not poll automatically. `monitor_compliance` evaluates current company, authority, and insurance data when invoked. The published API does not expose an alert-feed route, so `get_alerts` returns a structured compatibility error.
 
 **Q: Can I set up automatic polling?**
-A: Not within Watchdog itself. However, you can build a polling automation using Claude Code's automation capabilities or a cron job that invokes the MCP tool on a schedule. Watchdog provides the data retrieval and formatting; you provide the scheduling.
+A: Schedule `monitor_compliance` with your own automation if you need periodic current-state checks. Feed a validated event from your notification channel into `route_alert` when you need channel-specific formatting.
 
 **Q: What types of changes trigger alerts?**
 A: Insurance changes (new policy, cancellation, expiration, coverage amount changes), authority changes (granted, revoked, suspended, reinstated), safety changes (rating upgrade/downgrade, OOS rate changes), and operational changes (MCS-150 filings, fleet size changes, address changes, status changes).
@@ -555,10 +555,10 @@ A: Compliance drift is the change in a carrier's compliance posture over time. A
 A: Yes. Watchdog is completely standalone. You do not need Carrier Intel, Risk Engine, or Ops Reporter installed. Watchdog connects directly to the SearchCarriers Carrier Watch API for all its data. That said, using Watchdog alongside the pipeline plugins gives you a complete workflow: look up a carrier (Carrier Intel), assess its risk (Risk Engine), generate a report (Ops Reporter), and monitor it ongoing (Watchdog).
 
 **Q: What is the difference between `get_alerts` and `monitor_compliance`?**
-A: `get_alerts` gives you recent changes for all your watched carriers -- it is your daily inbox of what happened. `monitor_compliance` gives you the change history for a specific carrier over time -- it is the trend analysis that tells you whether a carrier is getting better or worse. Use `get_alerts` for daily monitoring. Use `monitor_compliance` when you need to investigate a specific carrier's trajectory.
+A: `get_alerts` exists for compatibility and reports that no published alert-feed endpoint is available. `monitor_compliance` performs a current-state compliance evaluation for one DOT number.
 
 **Q: Can I filter alerts by carrier?**
-A: In v0.1, `get_alerts` returns alerts for all watched carriers, filtered by severity and type. Carrier-specific alert filtering is planned for v0.2. In the meantime, ask Claude to filter: "Show me only the alerts for DOT 69494" and Claude will extract the relevant alerts from the full list.
+A: Apply filters in the notification system that produced the event, then pass the selected event to `route_alert`. Watchdog does not claim an upstream alert-filtering API.
 
 **Q: What happens if I remove a carrier and re-add it?**
-A: Removing a carrier clears it from your active watch list. Re-adding it starts monitoring fresh. Historical alert data for the carrier is retained on SearchCarriers servers, so `monitor_compliance` can still access past change history even after a remove/re-add cycle.
+A: Removal synchronizes the carrier to an empty `watch_types` array. Re-adding synchronizes the requested watch types. The plugin makes no retention claim about upstream alert history.

@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-fraud-detector
-description: >-
-  Detects chameleon carriers and fraud indicator patterns by cross-referencing entity
-  data across DOT numbers. Use when investigating a suspicious carrier or screening for fraud risk.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Detects chameleon carriers and fraud indicator patterns by cross-referencing entity data across DOT numbers. Use when investigating a suspicious carrier or screening for fraud risk.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- vetting-risk
 ---
 
 # Fraud Detector
@@ -35,7 +38,7 @@ Fetch the full carrier record to extract all entity identifiers.
 
 ```bash
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber={dot}"
+  "https://searchcarriers.com/api/v3/search?dotNumber={dot}"
 ```
 
 Extract and store these fields for cross-referencing:
@@ -65,16 +68,18 @@ These are indicators that FMCSA itself has flagged in the carrier record.
 def check_prior_revocation(carrier):
     indicators = []
 
-    if carrier.get('prior_revoke_flag') == 'Y':
-        prev_dot = carrier.get('prior_revoke_dot_number', 'unknown')
-        indicators.append({
-            "id": "FMCSA_PRIOR_REVOKE",
-            "severity": "HIGH",
-            "confidence": "CONFIRMED",
-            "finding": f"FMCSA has flagged this carrier as previously operating under DOT {prev_dot}, which was revoked.",
-            "evidence": f"prior_revoke_flag = 'Y', prior_revoke_dot_number = '{prev_dot}'",
-            "action": f"Investigate DOT {prev_dot} to understand why it was revoked."
-        })
+    if carrier.get("prior_revoke_flag") == "Y":
+        prev_dot = carrier.get("prior_revoke_dot_number", "unknown")
+        indicators.append(
+            {
+                "id": "FMCSA_PRIOR_REVOKE",
+                "severity": "HIGH",
+                "confidence": "CONFIRMED",
+                "finding": f"FMCSA has flagged this carrier as previously operating under DOT {prev_dot}, which was revoked.",
+                "evidence": f"prior_revoke_flag = 'Y', prior_revoke_dot_number = '{prev_dot}'",
+                "action": f"Investigate DOT {prev_dot} to understand why it was revoked.",
+            }
+        )
 
         # If we know the previous DOT, fetch its record too
         return indicators, prev_dot
@@ -87,7 +92,7 @@ If a prior DOT exists, fetch its record to understand the revocation:
 ```bash
 # Investigate the previous DOT
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber={prior_dot}"
+  "https://searchcarriers.com/api/v3/search?dotNumber={prior_dot}"
 ```
 
 Compare the two records: same officers? Same address? Same equipment? This builds the evidentiary chain.
@@ -99,22 +104,25 @@ A truly new carrier would have new-to-industry officers. Experienced officers on
 ```python
 from datetime import datetime
 
+
 def check_new_authority_experienced_officers(carrier):
     indicators = []
 
-    add_date = datetime.strptime(carrier['add_date'], '%Y-%m-%d')
+    add_date = datetime.strptime(carrier["add_date"], "%Y-%m-%d")
     age_months = (datetime.now() - add_date).days / 30
 
-    if age_months < 18 and carrier.get('company_officers'):
+    if age_months < 18 and carrier.get("company_officers"):
         # Flag for cross-reference investigation
-        indicators.append({
-            "id": "NEW_DOT_WITH_OFFICERS",
-            "severity": "MEDIUM",
-            "confidence": "REQUIRES_INVESTIGATION",
-            "finding": f"DOT is only {int(age_months)} months old but lists established company officers.",
-            "evidence": f"add_date = {carrier['add_date']}, officers = {carrier['company_officers']}",
-            "action": "Cross-reference officer names against other DOT numbers."
-        })
+        indicators.append(
+            {
+                "id": "NEW_DOT_WITH_OFFICERS",
+                "severity": "MEDIUM",
+                "confidence": "REQUIRES_INVESTIGATION",
+                "finding": f"DOT is only {int(age_months)} months old but lists established company officers.",
+                "evidence": f"add_date = {carrier['add_date']}, officers = {carrier['company_officers']}",
+                "action": "Cross-reference officer names against other DOT numbers.",
+            }
+        )
 
     return indicators
 ```
@@ -127,21 +135,23 @@ New carriers typically start small. A new DOT with a large fleet suggests trucks
 def check_fleet_size_vs_age(carrier):
     indicators = []
 
-    add_date = datetime.strptime(carrier['add_date'], '%Y-%m-%d')
+    add_date = datetime.strptime(carrier["add_date"], "%Y-%m-%d")
     age_months = (datetime.now() - add_date).days / 30
-    power_units = int(carrier.get('power_units', 0))
+    power_units = int(carrier.get("power_units", 0))
 
     # Heuristic: new carriers rarely start with more than 10-15 trucks
     if age_months < 12 and power_units > 15:
-        indicators.append({
-            "id": "LARGE_FLEET_NEW_CARRIER",
-            "severity": "MEDIUM",
-            "confidence": "HEURISTIC",
-            "finding": f"Carrier is {int(age_months)} months old but reports {power_units} power units. "
-                       f"This is unusual for a new operation.",
-            "evidence": f"add_date = {carrier['add_date']}, power_units = {power_units}",
-            "action": "Check equipment VINs for transfers from other DOTs."
-        })
+        indicators.append(
+            {
+                "id": "LARGE_FLEET_NEW_CARRIER",
+                "severity": "MEDIUM",
+                "confidence": "HEURISTIC",
+                "finding": f"Carrier is {int(age_months)} months old but reports {power_units} power units. "
+                f"This is unusual for a new operation.",
+                "evidence": f"add_date = {carrier['add_date']}, power_units = {power_units}",
+                "action": "Check equipment VINs for transfers from other DOTs.",
+            }
+        )
 
     return indicators
 ```
@@ -157,7 +167,7 @@ For each officer listed on the carrier, search for other DOTs with the same offi
 ```bash
 # Search for other carriers with the same officer name
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?superSearchTerm=JOHN%20SMITH"
+  "https://searchcarriers.com/api/v3/search?superSearchTerm=JOHN%20SMITH"
 ```
 
 For each result that is a **different** DOT number:
@@ -168,41 +178,45 @@ For each result that is a **different** DOT number:
 ```python
 def cross_reference_officers(carrier, search_results_by_officer):
     indicators = []
-    target_dot = carrier['dot_number']
+    target_dot = carrier["dot_number"]
 
     for officer_name, results in search_results_by_officer.items():
-        other_dots = [r for r in results if str(r.get('dot_number')) != str(target_dot)]
+        other_dots = [r for r in results if str(r.get("dot_number")) != str(target_dot)]
 
         for other in other_dots:
-            other_status = other.get('status_code', '')
+            other_status = other.get("status_code", "")
             connection = {
                 "officer": officer_name,
-                "other_dot": other['dot_number'],
-                "other_name": other.get('legal_name', ''),
-                "other_status": other_status
+                "other_dot": other["dot_number"],
+                "other_name": other.get("legal_name", ""),
+                "other_status": other_status,
             }
 
-            if other_status in ['I', 'REVOKED', 'OOS']:  # Inactive, Revoked, Out of Service
-                indicators.append({
-                    "id": "OFFICER_ON_INACTIVE_DOT",
-                    "severity": "HIGH",
-                    "confidence": "CONFIRMED",
-                    "finding": f"Officer '{officer_name}' also appears on DOT {other['dot_number']} "
-                               f"({other.get('legal_name', '')}) which has status '{other_status}'.",
-                    "evidence": json.dumps(connection),
-                    "action": f"Investigate DOT {other['dot_number']} safety record and reason for shutdown."
-                })
-            elif other_status == 'A':  # Active
-                indicators.append({
-                    "id": "OFFICER_ON_MULTIPLE_ACTIVE_DOTS",
-                    "severity": "LOW",
-                    "confidence": "INFORMATIONAL",
-                    "finding": f"Officer '{officer_name}' also appears on active DOT {other['dot_number']} "
-                               f"({other.get('legal_name', '')}). Multiple active DOTs is not inherently "
-                               f"suspicious but warrants awareness.",
-                    "evidence": json.dumps(connection),
-                    "action": "No immediate action required. Note the connection."
-                })
+            if other_status in ["I", "REVOKED", "OOS"]:  # Inactive, Revoked, Out of Service
+                indicators.append(
+                    {
+                        "id": "OFFICER_ON_INACTIVE_DOT",
+                        "severity": "HIGH",
+                        "confidence": "CONFIRMED",
+                        "finding": f"Officer '{officer_name}' also appears on DOT {other['dot_number']} "
+                        f"({other.get('legal_name', '')}) which has status '{other_status}'.",
+                        "evidence": json.dumps(connection),
+                        "action": f"Investigate DOT {other['dot_number']} safety record and reason for shutdown.",
+                    }
+                )
+            elif other_status == "A":  # Active
+                indicators.append(
+                    {
+                        "id": "OFFICER_ON_MULTIPLE_ACTIVE_DOTS",
+                        "severity": "LOW",
+                        "confidence": "INFORMATIONAL",
+                        "finding": f"Officer '{officer_name}' also appears on active DOT {other['dot_number']} "
+                        f"({other.get('legal_name', '')}). Multiple active DOTs is not inherently "
+                        f"suspicious but warrants awareness.",
+                        "evidence": json.dumps(connection),
+                        "action": "No immediate action required. Note the connection.",
+                    }
+                )
 
     return indicators
 ```
@@ -214,7 +228,7 @@ Carriers operating from the same physical address may be connected.
 ```bash
 # Search by city and state to find co-located carriers
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?city=DALLAS&state=TX&zipCode=75201"
+  "https://searchcarriers.com/api/v3/search?addressCity=DALLAS&addressState=TX&zipCode=75201"
 ```
 
 Filter results for exact or near-exact address matches. Flag if a co-located carrier is inactive or has a bad safety record.
@@ -226,7 +240,7 @@ Shared phone numbers between DOTs are a strong connection indicator.
 ```bash
 # Search by phone number or use superSearchTerm
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?superSearchTerm=2145551234"
+  "https://searchcarriers.com/api/v3/search?superSearchTerm=2145551234"
 ```
 
 #### Cross-Reference by Equipment VINs
@@ -236,11 +250,11 @@ Equipment transfers are the strongest evidence of a chameleon carrier. The same 
 ```bash
 # Fetch equipment for the target carrier
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/company/{dot}/equipment?perPage=50"
+  "https://searchcarriers.com/api/v3/company/{dot}/equipment?perPage=50"
 
 # For each VIN, search to see if it appears elsewhere
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?vin={vin_number}"
+  "https://searchcarriers.com/api/v1/search/by-vin/{vin_number}"
 ```
 
 ```python
@@ -248,26 +262,28 @@ def cross_reference_equipment(target_dot, equipment_records):
     indicators = []
 
     for equip in equipment_records:
-        vin = equip.get('vin', '')
+        vin = equip.get("vin", "")
         if not vin:
             continue
 
         # Search for this VIN across all carriers
         # (Assume vin_search_results comes from the API call above)
         for match in vin_search_results:
-            if str(match.get('dot_number')) != str(target_dot):
-                indicators.append({
-                    "id": "SHARED_EQUIPMENT",
-                    "severity": "CRITICAL",
-                    "confidence": "CONFIRMED",
-                    "finding": f"VIN {vin} ({equip.get('year', '')} {equip.get('make', '')} "
-                               f"{equip.get('model', '')}) also registered to DOT "
-                               f"{match['dot_number']} ({match.get('legal_name', '')}).",
-                    "evidence": f"VIN = {vin}, target DOT = {target_dot}, "
-                                f"other DOT = {match['dot_number']}",
-                    "action": f"Investigate DOT {match['dot_number']} status and safety record. "
-                              f"Equipment transfers from shut-down carriers are strong chameleon evidence."
-                })
+            if str(match.get("dot_number")) != str(target_dot):
+                indicators.append(
+                    {
+                        "id": "SHARED_EQUIPMENT",
+                        "severity": "CRITICAL",
+                        "confidence": "CONFIRMED",
+                        "finding": f"VIN {vin} ({equip.get('year', '')} {equip.get('make', '')} "
+                        f"{equip.get('model', '')}) also registered to DOT "
+                        f"{match['dot_number']} ({match.get('legal_name', '')}).",
+                        "evidence": f"VIN = {vin}, target DOT = {target_dot}, "
+                        f"other DOT = {match['dot_number']}",
+                        "action": f"Investigate DOT {match['dot_number']} status and safety record. "
+                        f"Equipment transfers from shut-down carriers are strong chameleon evidence.",
+                    }
+                )
 
     return indicators
 ```
@@ -280,46 +296,49 @@ Aggregate all indicators into a risk score.
 
 ```python
 def calculate_fraud_risk(indicators):
-    severity_weights = {
-        "CRITICAL": 40,
-        "HIGH": 25,
-        "MEDIUM": 10,
-        "LOW": 3
-    }
+    severity_weights = {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 10, "LOW": 3}
 
-    total_score = sum(severity_weights.get(i['severity'], 0) for i in indicators)
+    total_score = sum(severity_weights.get(i["severity"], 0) for i in indicators)
 
     if total_score == 0:
         risk_level = "LOW"
         assessment = "No fraud indicators detected. Carrier appears legitimate."
     elif total_score <= 15:
         risk_level = "LOW"
-        assessment = ("Minor indicators found but no pattern of fraud. "
-                      "Standard vetting procedures are sufficient.")
+        assessment = (
+            "Minor indicators found but no pattern of fraud. "
+            "Standard vetting procedures are sufficient."
+        )
     elif total_score <= 35:
         risk_level = "MEDIUM"
-        assessment = ("Multiple indicators suggest possible connections to other entities. "
-                      "Enhanced due diligence recommended before tendering freight.")
+        assessment = (
+            "Multiple indicators suggest possible connections to other entities. "
+            "Enhanced due diligence recommended before tendering freight."
+        )
     elif total_score <= 60:
         risk_level = "HIGH"
-        assessment = ("Strong pattern of fraud indicators detected. "
-                      "Carrier shows characteristics consistent with a chameleon operation. "
-                      "Do not tender freight without thorough manual investigation.")
+        assessment = (
+            "Strong pattern of fraud indicators detected. "
+            "Carrier shows characteristics consistent with a chameleon operation. "
+            "Do not tender freight without thorough manual investigation."
+        )
     else:
         risk_level = "CRITICAL"
-        assessment = ("Overwhelming evidence of chameleon carrier pattern. "
-                      "Multiple confirmed connections to shut-down or revoked entities. "
-                      "Refuse to broker. Report to FMCSA. Document all evidence.")
+        assessment = (
+            "Overwhelming evidence of chameleon carrier pattern. "
+            "Multiple confirmed connections to shut-down or revoked entities. "
+            "Refuse to broker. Report to FMCSA. Document all evidence."
+        )
 
     return {
         "score": total_score,
         "risk_level": risk_level,
         "assessment": assessment,
         "indicator_count": len(indicators),
-        "critical_count": sum(1 for i in indicators if i['severity'] == 'CRITICAL'),
-        "high_count": sum(1 for i in indicators if i['severity'] == 'HIGH'),
-        "medium_count": sum(1 for i in indicators if i['severity'] == 'MEDIUM'),
-        "low_count": sum(1 for i in indicators if i['severity'] == 'LOW')
+        "critical_count": sum(1 for i in indicators if i["severity"] == "CRITICAL"),
+        "high_count": sum(1 for i in indicators if i["severity"] == "HIGH"),
+        "medium_count": sum(1 for i in indicators if i["severity"] == "MEDIUM"),
+        "low_count": sum(1 for i in indicators if i["severity"] == "LOW"),
     }
 ```
 
@@ -447,6 +466,10 @@ Emphasize indicators that are specific to new carriers: fleet size vs. age anoma
 
 Extract officer names from the carrier record and search for each one. Present all connections found, with status of each connected DOT. Highlight any connections to inactive, revoked, or OOS carriers.
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | Error | Cause | Resolution |
@@ -468,6 +491,6 @@ Fraud detection is inherently probabilistic. Never state with certainty that a c
 - FMCSA URS (Unified Registration System): 49 CFR Part 365
 - OIG DOT Fraud Hotline: https://www.oig.dot.gov/hotline
 - NCCDB Consumer Complaint Database: https://nccdb.fmcsa.dot.gov
-- SearchCarriers API Documentation: `{baseDir}/docs/api-reference.md`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`
 - Entity cross-reference methodology: `{baseDir}/docs/fraud-detection.md`
 - FMCSA SAFER System: https://safer.fmcsa.dot.gov

@@ -1,13 +1,13 @@
 """Live smoke tests for raw API endpoints used by skills — hits real SearchCarriers API."""
 
-import pytest
 import httpx
-
-from conftest import assert_no_error, save_artifact
+import pytest
+from conftest import save_artifact
 
 BASE_URL = "https://searchcarriers.com/api/v1"
+SEARCH_V3_URL = "https://searchcarriers.com/api/v3/search"
 TEST_DOT = "299569"
-TEST_MC = "260913"
+TEST_DOCKET = "260340"
 
 
 @pytest.mark.integration
@@ -43,11 +43,11 @@ class TestSmokeEndpoints:
         save_artifact(smoke_reports_dir, "raw_oos_orders", data)
 
     async def test_authority_history(self, live_api_key: str, smoke_reports_dir) -> None:
-        """GET /authority/{dot}/history — authority status change history."""
+        """GET /authority/{docket}/history — authority status change history."""
         headers = {"Authorization": f"Bearer {live_api_key}"}
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{BASE_URL}/authority/{TEST_DOT}/history",
+                f"{BASE_URL}/authority/{TEST_DOCKET}/history",
                 headers=headers,
             )
 
@@ -72,12 +72,12 @@ class TestSmokeEndpoints:
         save_artifact(smoke_reports_dir, "raw_export", data)
 
     async def test_mc_search(self, live_api_key: str, smoke_reports_dir) -> None:
-        """GET /search?mcNumber={mc} — lookup carrier by MC number."""
+        """GET v3 search with docketNumber — lookup carrier by MC docket."""
         headers = {"Authorization": f"Bearer {live_api_key}"}
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{BASE_URL}/search",
-                params={"mcNumber": TEST_MC},
+                SEARCH_V3_URL,
+                params={"docketNumber": TEST_DOCKET},
                 headers=headers,
             )
 

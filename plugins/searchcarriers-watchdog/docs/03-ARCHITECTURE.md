@@ -2,7 +2,10 @@
 
 ## System Context
 
-Watchdog is a **STANDALONE** monitoring plugin. It is not part of the SearchCarriers stackable pipeline (Carrier Intel -> Risk Engine -> Ops Reporter). It operates independently, connecting directly to the SearchCarriers Carrier Watch API to manage watch lists, retrieve alerts, and track compliance drift.
+Watchdog is a **STANDALONE** monitoring plugin. It manages the documented
+company watch list, evaluates current compliance evidence, and formats caller
+supplied events for external channels. It does not claim an upstream alert
+feed or historical change stream.
 
 ```
                     SEARCHCARRIERS PLUGIN ECOSYSTEM
@@ -41,7 +44,9 @@ Watchdog is a **STANDALONE** monitoring plugin. It is not part of the SearchCarr
   (monitoring data source)
 ```
 
-**Upstream**: SearchCarriers Carrier Watch API at `https://searchcarriers.com/api/v1`. This is the same base URL as the carrier search API used by Carrier Intel, but Watchdog uses different endpoints: watch list management, alert retrieval, and carrier change history.
+**Upstream**: SearchCarriers' documented company-watch routes plus current
+company data from the hybrid API contract. There is no published alert-feed
+route; `get_alerts` returns a structured compatibility response.
 
 **No downstream consumers**: Watchdog output is for humans and external systems (Slack channels, Telegram groups, email inboxes, webhook endpoints). No other plugin reads Watchdog's output programmatically.
 
@@ -51,12 +56,10 @@ Watchdog is a **STANDALONE** monitoring plugin. It is not part of the SearchCarr
 
 | Component | Location | Responsibility |
 |-----------|----------|---------------|
-| **MCP Server** | `scripts/watchdog_mcp.py` | Registers 4 MCP tools, handles incoming tool calls, makes HTTP requests to the Carrier Watch API, enforces tier gating (Pro+ on all tools), returns structured JSON. Thin wrapper with no business logic beyond alert severity classification and compliance drift computation. |
-| **Alert Formatter** | `scripts/formatters.py` (planned) | Channel-specific alert formatting. Takes a raw alert object and a target channel (slack, telegram, email, webhook), returns a formatted message string or JSON structure. Pure function: alert data in, formatted output out. |
-| **Drift Analyzer** | `scripts/drift.py` (planned) | Compliance drift computation. Takes a carrier's change history, categorizes events as positive/negative/neutral, computes trend direction, and returns a drift assessment. Pure function: change history in, drift analysis out. |
-| **Commands** | `commands/` (planned) | Slash command definitions for common operations. |
-| **Embedded Skill** | `skills/searchcarriers-watchdog/SKILL.md` (planned) | Teaches Claude when to use each Watchdog tool, how to interpret alert severity, and how to advise users on monitoring strategy. |
-| **Agent** | `agents/watchdog-analyst.md` (planned) | Autonomous agent for comprehensive monitoring workflows: check alerts, identify critical items, format for delivery channels, assess compliance drift. |
+| **MCP Server** | `scripts/watchdog_mcp.py` | Implements watch synchronization, current-state compliance checks, compatibility errors, and four channel formatters. |
+| **Commands** | `commands/` | Slash commands for common watch operations. |
+| **Embedded Skill** | `skills/searchcarriers-watchdog/SKILL.md` | Teaches the supported API boundary and safe notification formatting. |
+| **Agent** | `agents/watchdog-monitor.md` | Coordinates watch-list and current-state review workflows without inventing unavailable alert history. |
 
 ## Data Flow
 
@@ -74,7 +77,7 @@ MCP Server: manage_watchlist(action="add", dot_number="69494")
   +--> Tier check: is user's tier >= proplus? (yes)
   |
   +--> HTTP POST to Carrier Watch add endpoint
-  |    POST /api/v1/carrier-watch
+  |    POST /api/v1/company/{dot}/watch
   |    Body: { dot_number: "69494" }
   |
   +--> Parse response: confirm carrier added, return carrier details
@@ -88,25 +91,15 @@ Claude receives structured JSON, formats confirmation for user
 User sees: "Added WERNER ENTERPRISES INC (DOT 69494) to your watch list."
 ```
 
-### Retrieving and Routing Alerts
+### Formatting a Validated External Event
 
 ```
-User: "Check for critical alerts and format them for Slack"
+User: "Format this validated carrier event for Slack"
   |
   v
-Claude orchestrates two tool calls:
+Claude validates the caller-supplied event, then calls:
   |
-  +--> Step 1: get_alerts(severity="critical", hours=24)
-  |    |
-  |    +--> Tier check: proplus? (yes)
-  |    |
-  |    +--> HTTP GET /api/v1/carrier-watch/alerts?severity=critical&hours=24
-  |    |
-  |    +--> Parse response: extract alert objects, classify severity
-  |    |
-  |    +--> Return: { meta: {...}, alerts: [ { carrier, change_type, severity, ... } ] }
-  |
-  +--> Step 2: For each alert, route_alert(alert={...}, channel="slack")
+  +--> route_alert(alert={...}, channel="slack")
        |
        +--> Tier check: proplus? (yes)
        |
@@ -127,40 +120,31 @@ Claude presents formatted Slack messages to user
 User copies the Block Kit JSON to their Slack integration, or sends via webhook
 ```
 
-### Compliance Drift Monitoring
+### Current-State Compliance Monitoring
 
 ```
-User: "How has DOT 3456789's compliance changed over the last 6 months?"
+User: "Check the current compliance posture for DOT 3456789"
   |
   v
-MCP Server: monitor_compliance(dot_number="3456789", days=180)
+MCP Server: monitor_compliance(dot_number="3456789")
   |
   +--> Tier check: proplus? (yes)
   |
-  +--> HTTP GET /api/v1/carrier-watch/history?dot=3456789&days=180
+  +--> Current company, authority, and insurance requests for DOT 3456789
   |
-  +--> Drift Analyzer processes change history:
-  |    +--> Categorize each event:
-  |    |    - Insurance reinstated -> positive
-  |    |    - Authority revoked -> negative
-  |    |    - Safety rating upgraded -> positive
-  |    |    - OOS rate increased -> negative
-  |    |    - Address change -> neutral
-  |    |
-  |    +--> Compute drift direction:
-  |    |    - Count positive vs negative events
-  |    |    - Weight by severity (critical changes count more)
-  |    |    - Classify: improving / stable / deteriorating
-  |    |
-  |    +--> Build timeline of events with drift assessment
+  +--> Evaluate current evidence:
+  |    - active and revoked authority records
+  |    - active insurance coverage and federal minimums
+  |    - current operating status
+  |    - MCS-150 filing freshness
   |
-  +--> Return: { meta: {...}, drift: { direction, events, summary } }
+  +--> Return: { compliance_status, checks, drift_items, carrier, ... }
   |
   v
-Claude receives drift analysis, presents to user with context
+Claude receives the current-state assessment and presents the evidence
   |
   v
-User sees: compliance trend, event timeline, and drift assessment
+User sees: current posture, failed checks, and required review actions
 ```
 
 ## Alert Routing Architecture
@@ -172,12 +156,12 @@ Watchdog uses a **format-only** architecture for alert routing. This is a delibe
   =====================================================================
 
   +-------------------+     +-------------------+     +-------------------+
-  |  get_alerts       |     |  route_alert      |     |  User/Automation  |
-  |  (retrieval)      |---->|  (formatting)     |---->|  (delivery)       |
+  | External event    |     |  route_alert      |     |  User/Automation  |
+  | (validated input) |---->|  (formatting)     |---->|  (delivery)       |
   |                   |     |                   |     |                   |
-  |  Raw alert data   |     |  Channel-specific |     |  Sends formatted  |
-  |  from Carrier     |     |  formatting:      |     |  message via:     |
-  |  Watch API        |     |  - Slack blocks   |     |  - Slack webhook  |
+  |  Notification     |     |  Channel-specific |     |  Sends formatted  |
+  |  supplied by the  |     |  formatting:      |     |  message via:     |
+  |  caller           |     |  - Slack blocks   |     |  - Slack webhook  |
   |                   |     |  - Telegram MD    |     |  - Telegram Bot   |
   |                   |     |  - Email HTML     |     |  - SMTP/SendGrid  |
   |                   |     |  - Webhook JSON   |     |  - HTTP POST      |
@@ -196,15 +180,15 @@ Watchdog uses a **format-only** architecture for alert routing. This is a delibe
 
 | Endpoint | Method | Used By | Purpose |
 |----------|--------|---------|---------|
-| `/api/v1/carrier-watch` | POST | `manage_watchlist` (add) | Add a carrier to the watch list |
-| `/api/v1/carrier-watch` | DELETE | `manage_watchlist` (remove) | Remove a carrier from the watch list |
-| `/api/v1/carrier-watch` | GET | `manage_watchlist` (list) | List all watched carriers |
-| `/api/v1/carrier-watch/alerts` | GET | `get_alerts` | Retrieve alerts with filtering |
-| `/api/v1/carrier-watch/history` | GET | `monitor_compliance` | Retrieve change history for a carrier |
+| `/api/v1/company/{dot}/watch` | POST | `manage_watchlist` (add/remove) | Synchronize watch types; empty array removes watches |
+| `/api/v1/company/watch` | GET | `manage_watchlist` (list) | List all watched carriers |
+| No published alert-feed route | None | `get_alerts` | Return a structured compatibility error |
+| Hybrid current-data routes | GET | `monitor_compliance` | Evaluate current compliance state |
 
-All endpoints use `Authorization: Bearer {token}` header and return JSON. Alert and history endpoints support query parameters for filtering by time window, type, and severity.
-
-**Note:** The exact endpoint paths for the Carrier Watch API are pending confirmation from Garret (adrenallen). The paths above are the expected patterns based on the SearchCarriers API conventions. If the actual paths differ, the MCP server configuration will be updated accordingly.
+Published endpoints use the `Authorization: Bearer {token}` header and return
+JSON. Time-window, type, and severity filters apply only to externally supplied
+events passed to the formatter; they are not sent to an undocumented upstream
+alert route.
 
 ## Security Model
 
@@ -222,7 +206,7 @@ All endpoints use `Authorization: Bearer {token}` header and return JSON. Alert 
 **Data classification:**
 - Watch list data (which carriers a user monitors) is stored on SearchCarriers servers, not locally
 - Alert data is derived from public FMCSA records and is not PII
-- Compliance drift analysis is computed from public change history
+- Compliance checks are computed from current API evidence; the plugin does not claim a historical change feed
 - No user-specific data beyond the API key is handled by the plugin
 
 **What gets logged:**
@@ -240,8 +224,8 @@ All endpoints use `Authorization: Bearer {token}` header and return JSON. Alert 
 
 | Error | HTTP Code | User Message | Recovery Action |
 |-------|----------|-------------|----------------|
-| API key not set | N/A (startup) | "SEARCHCARRIERS_API_KEY not set. Get your key at https://searchcarriers.com/settings/api" | Block all tool calls until key is configured |
-| Invalid API key | 401 | "Invalid API key. Verify your key at https://searchcarriers.com/settings/api" | No retry -- user must fix key |
+| API key not set | N/A (startup) | "SEARCHCARRIERS_API_KEY not set. Get your key at https://searchcarriers.com/settings/api-tokens" | Block all tool calls until key is configured |
+| Invalid API key | 401 | "Invalid API key. Verify your key at https://searchcarriers.com/settings/api-tokens" | No retry -- user must fix key |
 | Insufficient tier | 403 | "Watchdog tools require Pro+ tier. Your tier: {tier}. Upgrade at https://searchcarriers.com/pricing" | No retry -- show upgrade path |
 | Carrier not found | 404 | "No carrier found for DOT {dot}. Verify the DOT number is correct." | Suggest carrier_lookup for name search |
 | Carrier not watched | 404 | "DOT {dot} is not on your watch list." | Suggest manage_watchlist add |
@@ -260,12 +244,11 @@ All errors return structured JSON: `{ "error": { "code": "TIER_INSUFFICIENT", "m
 | `manage_watchlist` (add) | < 1 second | 3 seconds | Single API POST |
 | `manage_watchlist` (remove) | < 1 second | 3 seconds | Single API DELETE |
 | `manage_watchlist` (list) | < 2 seconds | 5 seconds | Single API GET, may return 200+ carriers |
-| `get_alerts` (default 24h) | < 2 seconds | 5 seconds | Single API GET with filters |
+| `get_alerts` | < 100 milliseconds | 500 milliseconds | Local compatibility response; no API call |
 | `route_alert` (single alert) | < 100 milliseconds | 500 milliseconds | Pure formatting, no I/O |
 | `route_alert` (batch of 10) | < 500 milliseconds | 2 seconds | 10x formatting calls |
-| `monitor_compliance` (90 days) | < 3 seconds | 8 seconds | API call + drift computation |
-| `monitor_compliance` (365 days) | < 5 seconds | 10 seconds | Larger history, more computation |
+| `monitor_compliance` | < 3 seconds | 8 seconds | Three current-data API calls plus checks |
 | MCP server cold start | < 1 second | 3 seconds | Python import + env validation |
 | Tier check | < 1 millisecond | N/A | In-memory comparison, no I/O |
 
-Primary bottleneck is network round-trip time to the Carrier Watch API. Alert formatting (`route_alert`) is pure string/JSON construction with no I/O. Compliance drift computation involves categorizing and counting events from the change history -- milliseconds of CPU time, not a performance concern.
+Primary bottleneck is network round-trip time to the SearchCarriers API. Alert formatting (`route_alert`) is pure string/JSON construction with no I/O; current-state compliance checks add negligible CPU time.

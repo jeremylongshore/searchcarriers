@@ -1,19 +1,24 @@
 ---
 name: searchcarriers-vin-decoder
-description: >-
-  Retrieves equipment details and cross-references companies operating the
-  same VINs. Use when decoding VINs or investigating fleet equipment.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Retrieves equipment details and cross-references companies operating the same VINs. Use when decoding VINs or investigating fleet equipment.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- search-discovery
 ---
 
 # VIN Decoder
 
 ## Overview
+
+> **API contract:** Use the repository `API-DISCOVERY.md` for the current v3/v2/v1 route map and verified parameter names. Do not infer newer-version routes.
 
 Every commercial motor vehicle registered with FMCSA is tracked by VIN back to the carrier operating it. SearchCarriers provides two complementary views: equipment detail for a known carrier (what trucks does DOT X own?) and VIN-based carrier search (who operates this specific truck?). Combined, these let you build a complete picture of a vehicle's operational history, spot mismatched fleet data, identify leasing relationships, and flag equipment-related compliance risks.
 
@@ -32,10 +37,10 @@ Classify the user's request into one of three patterns:
 
 | User Signal | Query Type | Primary Endpoint |
 |---|---|---|
-| 17-character VIN string alone | VIN carrier search | `GET /search?vin=` |
+| 17-character VIN string alone | VIN carrier search | `GET /search/by-vin/` |
 | DOT number + "equipment" / "fleet" / "trucks" | Equipment roster | `GET /company/{dot}/equipment` |
 | DOT number + "vehicles" | Vehicle list | `GET /company/{dot}/vehicles` |
-| VIN + "who operates" / "who else" | Cross-carrier VIN search | `GET /search?vin=` |
+| VIN + "who operates" / "who else" | Cross-carrier VIN search | `GET /search/by-vin/` |
 | DOT + specific VIN | Equipment detail + cross-reference | Both endpoints |
 
 ### 2. Retrieve Equipment Data by DOT
@@ -43,7 +48,7 @@ Classify the user's request into one of three patterns:
 To list all equipment registered to a carrier:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/company/{dot}/equipment" \
+curl -s "https://searchcarriers.com/api/v3/company/{dot}/equipment" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -80,7 +85,7 @@ Vehicle records include:
 To find every carrier associated with a specific VIN:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?vin={vin}" \
+curl -s "https://searchcarriers.com/api/v1/search/by-vin/{vin}" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -152,7 +157,7 @@ Scan results and explicitly call out:
 **User**: "Decode VIN 1HGBH41JXMN109186"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?vin=1HGBH41JXMN109186" \
+curl -s "https://searchcarriers.com/api/v1/search/by-vin/1HGBH41JXMN109186" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -164,7 +169,7 @@ Present each carrier operating this VIN with an abbreviated carrier summary (leg
 **User**: "What equipment does DOT 12345 have?"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/company/12345/equipment" \
+curl -s "https://searchcarriers.com/api/v3/company/12345/equipment" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -176,7 +181,7 @@ Render the equipment table, fleet summary, and age analysis. Flag any risk indic
 **User**: "Who else operates VIN 3AKJGLDR7DSBY1038?"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?vin=3AKJGLDR7DSBY1038" \
+curl -s "https://searchcarriers.com/api/v1/search/by-vin/3AKJGLDR7DSBY1038" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -190,7 +195,7 @@ Build the cross-carrier relationship table. Compare addresses, officers, and ope
 Run both calls:
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/company/12345/equipment" \
+curl -s "https://searchcarriers.com/api/v3/company/12345/equipment" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
@@ -208,12 +213,16 @@ Merge the data: equipment provides make/model/year/GVWR; vehicles provides licen
 **User**: "Is VIN 1FUJGLDR8BSAX9472 leased?"
 
 ```bash
-curl -s "https://searchcarriers.com/api/v1/search?vin=1FUJGLDR8BSAX9472" \
+curl -s "https://searchcarriers.com/api/v1/search/by-vin/1FUJGLDR8BSAX9472" \
   -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
   -H "Accept: application/json"
 ```
 
 If multiple carriers share the VIN, compare their entity types and addresses. A pattern of one company being a leasing/rental entity (often identifiable by name or large fleet size with no operating authority) and another being an operating carrier strongly suggests a lease arrangement.
+
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
 
 ## Error Handling
 

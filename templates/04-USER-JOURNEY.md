@@ -52,7 +52,7 @@
 
 ### Scenario: API Key Not Set
 **Trigger**: Running any command without SEARCHCARRIERS_API_KEY
-**Message**: "SEARCHCARRIERS_API_KEY not set. Get your key at searchcarriers.com/settings/api"
+**Message**: "SEARCHCARRIERS_API_KEY not set. Get your key at searchcarriers.com/settings/api-tokens"
 
 ### Scenario: Insufficient Tier
 **Trigger**: Using a Pro feature on Free tier

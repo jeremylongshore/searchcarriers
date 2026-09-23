@@ -12,7 +12,8 @@
 1. **NOT replacing SearchCarriers Carrier Watch web UI.** The web UI provides visual dashboards, notification preferences, and team-wide monitoring. This plugin serves users who want watch list management and alert access in their terminal.
 2. **NOT sending alerts directly.** Watchdog formats alert messages for each channel (Slack blocks, Telegram markdown, email HTML, webhook JSON). The user or their automation sends the formatted message. Watchdog is a formatting tool, not a delivery service. This avoids storing OAuth tokens, webhook URLs, or SMTP credentials.
 3. **NOT part of the stackable pipeline.** Watchdog is a standalone monitoring plugin. It does not consume output from Carrier Intel, Risk Engine, or Ops Reporter. It does not produce output for other plugins to consume. It operates independently against the SearchCarriers Carrier Watch API.
-4. **NOT real-time streaming.** Watchdog polls for alerts on demand (`get_alerts`). It does not maintain a persistent connection, WebSocket, or push notification channel. Users check for alerts when they want to, or build their own polling automation around the tool.
+4. **No alert-feed retrieval.** The public API does not expose an alert-feed
+   route. `get_alerts` exists only to return a truthful compatibility response.
 5. **NOT storing watch list data locally.** The watch list lives on SearchCarriers servers. Watchdog is a stateless client that reads and writes via the Carrier Watch API.
 
 ## User Stories
@@ -111,22 +112,24 @@ As an **account manager**, I want to **format an alert as an HTML email**, so th
 
 **Priority:** P0
 
-### FR-02: Alert Retrieval with Filtering
+### FR-02: Truthful Alert-Feed Compatibility
 
-**Description:** The `get_alerts` tool retrieves recent alerts for watched carriers. Supports filtering by time window, alert type (safety, insurance, authority), and severity (critical, warning, info).
+**Description:** The `get_alerts` tool preserves client compatibility while
+clearly reporting that the published API has no alert-feed route.
 
 **Acceptance Criteria:**
-- Default time window is 24 hours; configurable via `hours` parameter
-- Filter by `alert_type`: safety, insurance, authority, all (default)
-- Filter by `severity`: critical, warning, info, all (default)
-- Returns alerts sorted by timestamp (newest first)
-- Each alert includes carrier identification, change details, and severity
+- Makes no upstream HTTP call
+- Returns the `endpoint_unavailable` error code
+- Names the documented company-watch routes
+- Directs users to their configured SearchCarriers notification channel
 
 **Priority:** P0
 
 ### FR-03: Alert Severity Classification
 
-**Description:** Alerts are classified into three severity levels based on the nature of the change. Classification happens at retrieval time based on alert type and change magnitude.
+**Description:** Caller-supplied events are classified into three severity
+levels while `route_alert` formats them. Classification does not imply that the
+event came from a SearchCarriers alert-feed endpoint.
 
 **Acceptance Criteria:**
 - **Critical**: Authority revoked, insurance policy cancelled, Out-of-Service order issued
@@ -186,23 +189,24 @@ As an **account manager**, I want to **format an alert as an HTML email**, so th
 
 ### FR-08: Compliance Drift Detection
 
-**Description:** The `monitor_compliance` tool retrieves the change history for a watched carrier over a configurable period and analyzes the trend. It identifies whether the carrier's compliance posture is improving, stable, or deteriorating based on the nature and frequency of changes.
+**Description:** The `monitor_compliance` tool retrieves current carrier,
+authority, and insurance data and evaluates the carrier against explicit
+compliance checks.
 
 **Acceptance Criteria:**
-- Default monitoring period is 90 days; configurable via `days` parameter
-- Tracks insurance status changes, authority changes, safety rating changes
-- Computes drift direction: improving (positive changes outweigh negative), stable (no significant changes), deteriorating (negative changes outweigh positive)
-- Returns change timeline with individual events
-- Includes summary statistics: total changes, critical changes, days since last change
+- Accepts a DOT number and returns itemized pass/fail checks
+- Checks operating authority, revoked authority, insurance coverage, operating status, and filing freshness
+- Returns `compliant`, `drift`, or `critical` from current evidence
+- Lists failed checks in `drift_items` without claiming historical trend data
 
 **Priority:** P1
 
 ## MVP Scope
 
-Ships in v0.1.0:
+Initial v0.1.0 planning scope (superseded where the public API contract differs):
 
 - [ ] `manage_watchlist` -- add, remove, list operations via Carrier Watch API
-- [ ] `get_alerts` -- alert retrieval with type and severity filtering
+- [ ] `get_alerts` -- compatibility response explaining that no published alert-feed route exists
 - [ ] `route_alert` -- Slack and webhook formatting (email and Telegram in v0.2)
 - [ ] `monitor_compliance` -- compliance drift detection with trend analysis
 - [ ] Tier gating on all four tools (Pro+ required)
@@ -231,7 +235,7 @@ Deferred to v0.2.0:
 
 ## Dependencies
 
-- **SearchCarriers Carrier Watch API** -- all four tools depend on the Carrier Watch endpoints at `https://searchcarriers.com/api/v1`. These are separate from the carrier search endpoints used by Carrier Intel.
+- **SearchCarriers API** -- watch management uses the documented v1 company-watch routes; compliance monitoring reads current company data through the hybrid API contract. Alert formatting accepts validated external events because no alert-feed route is published.
 - **Valid API key with Pro+ tier** -- `SEARCHCARRIERS_API_KEY` environment variable must be set with a Pro+ tier Laravel Sanctum bearer token
 - **MCP protocol** -- plugin runs as an MCP server; requires Claude Code with MCP support
 - **httpx** -- async HTTP client for API calls

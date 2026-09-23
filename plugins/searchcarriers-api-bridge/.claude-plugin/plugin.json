@@ -1,7 +1,7 @@
 {
   "name": "searchcarriers-api-bridge",
   "description": "API health monitoring, bulk carrier operations, TMS synchronization, and webhook management.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "mcp",
   "pipeline_stage": "integration",
   "min_tier": "smb",
@@ -23,11 +23,11 @@
     },
     {
       "name": "webhook_manage",
-      "description": "Create, list, update, and delete Carrier Watch webhook endpoints.",
+      "description": "Manage a local registry of downstream webhook delivery configuration.",
       "min_tier": "smb"
     }
   ],
   "author": "Jeremy Longshore <jeremy@intentsolutions.io>",
-  "license": "BUSL-1.1",
-  "repository": "https://github.com/intent-solutions-io/searchcarriers"
+  "license": "Apache-2.0",
+  "repository": "https://github.com/jeremylongshore/searchcarriers-tools"
 }

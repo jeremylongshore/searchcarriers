@@ -17,7 +17,7 @@ httpx>=0.27
 mcp>=1.0
 ```
 
-Specified in `scripts/requirements.txt`. No transitive dependency on pydantic in v0.1 -- pydantic is recommended for v0.2 response validation but not required for MVP.
+Runtime dependencies are declared in `scripts/requirements.txt`; repository development dependencies are declared in `pyproject.toml`. The current response-contract layer uses explicit Python normalization helpers, while MCP supplies the tool schemas.
 
 ## File Structure
 
@@ -51,16 +51,13 @@ searchcarriers-carrier-intel/
 
 | Tool | Endpoint | Method | Parameters | Min Tier | Notes |
 |------|----------|--------|-----------|----------|-------|
-| `carrier_lookup` | `/api/v1/search` | GET | `superSearchTerm`, `dotNumber`, `legalName`, `mcNumber`, `state`, `city`, `zipCode`, `vin`, `perPage`, `page` | Free | Auto-detects search type from input |
-| `carrier_profile` | `/api/v1/search` | GET | `dotNumber` | Free | First of 3 sequential calls |
-| `carrier_profile` | `/api/v1/company/{dot}/authorities` | GET | -- | Free | Second call: authority status |
-| `carrier_profile` | `/api/v1/company/{dot}/insurances` | GET | -- | Free | Third call: insurance records |
-| `entity_map` | `/api/v1/company/{dot}/equipment` | GET | -- | Pro | Get VIN roster |
-| `entity_map` | `/api/v1/search` | GET | `vin` | Pro | Per-VIN search (repeated) |
-| `fleet_summary` | `/api/v1/company/{dot}/equipment` | GET | -- | Free | Detailed equipment records |
-| `fleet_summary` | `/api/v1/company/{dot}/vehicles` | GET | -- | Free | Simplified vehicle list |
+| `carrier_lookup` | `/api/v3/search` plus dedicated v1 SCAC/VIN routes | GET | `superSearchTerm`, `dotNumber`, `docketNumber`, `addressState`, `addressCity`, `zipCode`, `perPage`, `page` | Free | Auto-detects search type and maps the MCP input to the current API contract |
+| `carrier_profile` | `/api/v3/company/{dot}` | GET | `fields` | Free | Field-selected company response |
+| `entity_map` | `/api/v3/company/{dot}/equipment` plus `/api/v1/search/by-vin/{vin}` | GET | v3 filters and VIN path | Pro | Per-VIN relationship search |
+| `fleet_summary` | `/api/v3/company/{dot}/equipment` | GET | v3 filters | Free | Current equipment roster |
 
-**Base URL:** `https://searchcarriers.com/api/v1`
+**API origin:** `https://searchcarriers.com`; each capability selects its
+documented API version.
 
 **Authentication:** All requests include `Authorization: Bearer {SEARCHCARRIERS_API_KEY}` header.
 
@@ -70,8 +67,8 @@ searchcarriers-carrier-intel/
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api |
-| `SEARCHCARRIERS_API_BASE` | No | `https://searchcarriers.com/api/v1` | API base URL override (for testing against staging) |
+| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api-tokens |
+| `SEARCHCARRIERS_API_BASE` | No | `https://searchcarriers.com` | API origin override (for testing against staging) |
 | `SEARCHCARRIERS_TIMEOUT` | No | `10` | HTTP request timeout in seconds |
 | `SEARCHCARRIERS_MAX_RETRIES` | No | `3` | Maximum retry attempts for transient failures (429, 504) |
 | `SEARCHCARRIERS_LOG_LEVEL` | No | `WARNING` | Logging level: DEBUG, INFO, WARNING, ERROR |
@@ -261,6 +258,7 @@ TOOL_TIERS = {
     "fleet_summary": "free",
 }
 
+
 def check_tier(tool_name: str, user_tier: str) -> bool:
     """Return True if user_tier is sufficient for tool_name."""
     required = TOOL_TIERS[tool_name]
@@ -275,7 +273,7 @@ Tier is determined from the API key validation response. If the API returns a 40
 
 Mock all HTTP responses using `httpx.MockTransport` or `respx`. Test:
 
-- **Search auto-detection**: Verify DOT input routes to `dotNumber`, MC input routes to `mcNumber`, name input routes to `superSearchTerm`, VIN input routes to `vin`
+- **Search auto-detection**: Verify DOT input routes to `dotNumber`, MC input routes to `docketNumber`, name input routes to `superSearchTerm`, VIN input routes to `vin`
 - **Profile aggregation**: Verify three API calls are made in sequence, response is combined correctly
 - **Entity mapping**: Verify VIN extraction from equipment, per-VIN search execution, relationship mapping
 - **Fleet summary**: Verify equipment and vehicle data are combined
@@ -373,4 +371,4 @@ Restart Claude Code to pick up changes. No database migrations, no config file c
 | MCP server cold start | 500ms | 1s | 2s | Python import + env validation |
 | Tier check | <1ms | <1ms | <1ms | In-memory lookup, no I/O |
 
-Primary bottleneck is network round-trip time to the SearchCarriers API. Entity mapping is the only operation that scales linearly with fleet size due to per-VIN searches. Future optimization: batch VIN search endpoint (pending API support from Garret).
+Primary bottleneck is network round-trip time to the SearchCarriers API. Entity mapping is the only operation that scales linearly with fleet size due to per-VIN searches. A documented batch VIN endpoint would allow a future optimization.

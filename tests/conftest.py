@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -37,7 +36,14 @@ def live_api_key():
     key = os.environ.get("SEARCHCARRIERS_API_KEY", "").strip()
     if not key:
         pytest.skip("SEARCHCARRIERS_API_KEY not set — skipping live test")
-    return key
+
+    class RedactedSecret(str):
+        """String-compatible secret whose diagnostic representation is redacted."""
+
+        def __repr__(self):
+            return "<redacted>"
+
+    return RedactedSecret(key)
 
 
 @pytest.fixture
@@ -47,13 +53,13 @@ def fixtures_dir():
 
 
 @pytest.fixture
-def carrier_jbhunt():
-    return json.loads((FIXTURES_DIR / "carrier_jbhunt.json").read_text())
+def carrier_primary():
+    return json.loads((FIXTURES_DIR / "carrier_primary.json").read_text())
 
 
 @pytest.fixture
-def carrier_werner():
-    return json.loads((FIXTURES_DIR / "carrier_werner.json").read_text())
+def carrier_secondary():
+    return json.loads((FIXTURES_DIR / "carrier_secondary.json").read_text())
 
 
 @pytest.fixture
@@ -77,8 +83,8 @@ def equipment_sample():
 
 
 @pytest.fixture
-def carrier_realapi():
-    return json.loads((FIXTURES_DIR / "carrier_realapi.json").read_text())
+def carrier_nested():
+    return json.loads((FIXTURES_DIR / "carrier_nested.json").read_text())
 
 
 def assert_error_payload(result: dict, expected_code: str) -> None:
@@ -128,6 +134,7 @@ def parse_frontmatter(skill_path: Path) -> dict:
         return {}
 
     import yaml
+
     try:
         return yaml.safe_load(parts[1]) or {}
     except Exception:
@@ -148,9 +155,31 @@ def smoke_reports_dir():
 
 
 def save_artifact(directory: Path, name: str, data) -> Path:
-    """Save a JSON artifact to the smoke reports directory."""
+    """Save a structural receipt without persisting licensed API values."""
+
+    def shape(value, depth=0):
+        if depth >= 3:
+            return type(value).__name__
+        if isinstance(value, dict):
+            return {
+                "type": "object",
+                "keys": sorted(str(key) for key in value),
+                "children": {
+                    str(key): shape(child, depth + 1)
+                    for key, child in value.items()
+                    if key in {"data", "links", "meta", "error", "_pipeline"}
+                },
+            }
+        if isinstance(value, list):
+            return {
+                "type": "array",
+                "count": len(value),
+                "item_shape": shape(value[0], depth + 1) if value else None,
+            }
+        return type(value).__name__
+
     path = directory / f"{name}.json"
-    path.write_text(json.dumps(data, indent=2, default=str))
+    path.write_text(json.dumps(shape(data), indent=2, sort_keys=True))
     return path
 
 

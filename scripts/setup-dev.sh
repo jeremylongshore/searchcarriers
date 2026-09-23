@@ -39,7 +39,7 @@ if [ -n "${SEARCHCARRIERS_API_KEY:-}" ]; then
 else
     echo "API key: NOT SET"
     echo "  Set SEARCHCARRIERS_API_KEY in your environment or .env file"
-    echo "  Get your key at https://searchcarriers.com/settings/api"
+    echo "  Get your key at https://searchcarriers.com/settings/api-tokens"
 fi
 
 # Run validation

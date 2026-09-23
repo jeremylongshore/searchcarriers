@@ -51,25 +51,25 @@ searchcarriers-watchdog/
 
 | Tool | Endpoint | Method | Parameters | Min Tier | Notes |
 |------|----------|--------|-----------|----------|-------|
-| `manage_watchlist` (add) | `/api/v1/carrier-watch` | POST | `dot_number` in body | Pro+ | Add carrier to watch list |
-| `manage_watchlist` (remove) | `/api/v1/carrier-watch` | DELETE | `dot_number` in body or path | Pro+ | Remove carrier from watch list |
-| `manage_watchlist` (list) | `/api/v1/carrier-watch` | GET | `perPage`, `page` | Pro+ | List all watched carriers |
-| `get_alerts` | `/api/v1/carrier-watch/alerts` | GET | `hours`, `type`, `severity` | Pro+ | Retrieve recent alerts |
-| `monitor_compliance` | `/api/v1/carrier-watch/history` | GET | `dot`, `days` | Pro+ | Carrier change history |
+| `manage_watchlist` (add) | `/api/v1/company/{dot}/watch` | POST | `watch_types` array | Pro+ | Synchronize watch categories |
+| `manage_watchlist` (remove) | `/api/v1/company/{dot}/watch` | POST | Empty `watch_types` array | Pro+ | Stop all watches for carrier |
+| `manage_watchlist` (list) | `/api/v1/company/watch` | GET | None | Pro+ | List watched carriers |
+| `get_alerts` | No published route | None | None | Pro+ | Returns structured `endpoint_unavailable` compatibility response |
+| `monitor_compliance` | Hybrid company/detail routes | GET | DOT number | Pro+ | Evaluate current company, authority, and insurance data |
 
 **Base URL:** `https://searchcarriers.com/api/v1`
 
 **Authentication:** All requests include `Authorization: Bearer {SEARCHCARRIERS_API_KEY}` header.
 
-**Pagination:** List and alerts endpoints use Laravel pagination with `perPage` (default 25, max 100) and `page` parameters. History endpoint returns all records within the specified time window.
-
-**Note:** Exact endpoint paths pending confirmation from Garret (adrenallen). The paths above are based on SearchCarriers API conventions. The `route_alert` tool does not call any API -- it performs local formatting only.
+**Pagination:** The watch list uses the pagination metadata returned by the API.
+No pagination behavior is claimed for an alert feed because no such route is
+published. The `route_alert` tool performs local formatting only.
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api |
+| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api-tokens |
 | `SEARCHCARRIERS_TIER` | No | -- | Override tier detection. Values: free, basic, pro, proplus, smb, enterprise. If not set, tier is determined from API response. |
 | `SEARCHCARRIERS_API_BASE` | No | `https://searchcarriers.com/api/v1` | API base URL override (for testing against staging) |
 | `SEARCHCARRIERS_TIMEOUT` | No | `10` | HTTP request timeout in seconds |
@@ -182,7 +182,7 @@ searchcarriers-watchdog/
 **Input:**
 ```json
 {
-  "alert": "object (required) - Alert object from get_alerts",
+  "alert": "object (required) - Validated carrier event supplied by the caller",
   "channel": "string (required) - One of: slack, telegram, email, webhook"
 }
 ```
@@ -437,6 +437,7 @@ TOOL_TIERS = {
     "monitor_compliance": "proplus",
 }
 
+
 def check_tier(tool_name: str, user_tier: str) -> bool:
     """Return True if user_tier is sufficient for tool_name."""
     required = TOOL_TIERS[tool_name]
@@ -454,13 +455,13 @@ Tier is determined from the `SEARCHCARRIERS_TIER` environment variable or from t
 Mock all HTTP responses using `httpx.MockTransport` or `respx`. Test:
 
 - **Watch list CRUD**: Verify add, remove, and list actions produce correct API calls and parse responses
-- **Alert retrieval**: Verify filtering by hours, type, and severity
+- **Alert compatibility**: Verify `get_alerts` returns `endpoint_unavailable` without an HTTP call
 - **Alert severity classification**: Verify critical/warning/info classification for all change types
 - **Slack formatting**: Verify valid Block Kit JSON output, correct color mapping
 - **Telegram formatting**: Verify MarkdownV2 output, special character escaping
 - **Email formatting**: Verify HTML structure, inline CSS, severity-colored headers
 - **Webhook formatting**: Verify flat JSON payload with required fields
-- **Compliance drift**: Verify drift direction computation (improving/stable/deteriorating)
+- **Compliance checks**: Verify current-state pass/fail checks and aggregate status
 - **Error handling**: Verify correct user messages for 401, 403, 404, 429, 504
 - **Tier gating**: Verify non-Pro+ user cannot access any tool
 
@@ -470,9 +471,9 @@ Marked with `@pytest.mark.integration`. Require a valid `SEARCHCARRIERS_API_KEY`
 
 - **manage_watchlist("add", "69494")** -- add Werner to watch list and confirm
 - **manage_watchlist("list")** -- verify Werner appears in list
-- **get_alerts(hours=168)** -- retrieve a week of alerts (may be empty)
+- **get_alerts()** -- verify the truthful compatibility response
 - **manage_watchlist("remove", "69494")** -- remove Werner and confirm
-- **Latency**: manage_watchlist < 3s, get_alerts < 5s
+- **Latency**: manage_watchlist < 3s; `get_alerts` completes locally
 
 Integration tests are excluded from CI by default (no API key in CI environment). Run locally with:
 
@@ -560,8 +561,7 @@ Restart Claude Code to pick up changes. No database migrations, no config file c
 | `manage_watchlist` (remove) | 400ms | 800ms | 1.5s | Single API DELETE + network latency |
 | `manage_watchlist` (list, 50 carriers) | 600ms | 1.2s | 2.5s | Single API GET + response size |
 | `manage_watchlist` (list, 200 carriers) | 1.0s | 2.0s | 3.5s | Paginated response |
-| `get_alerts` (24h window) | 500ms | 1.0s | 2.0s | Single API GET with filters |
-| `get_alerts` (7d window) | 800ms | 1.5s | 3.0s | Larger result set |
+| `get_alerts` | <100ms | <250ms | 500ms | Local compatibility response; no API call |
 | `route_alert` (slack) | 5ms | 15ms | 50ms | JSON construction, no I/O |
 | `route_alert` (telegram) | 3ms | 10ms | 30ms | String formatting, no I/O |
 | `route_alert` (email) | 8ms | 20ms | 60ms | HTML construction, no I/O |

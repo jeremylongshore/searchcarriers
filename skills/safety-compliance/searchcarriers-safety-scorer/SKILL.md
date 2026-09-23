@@ -1,15 +1,17 @@
 ---
 name: searchcarriers-safety-scorer
-description: >-
-  Translates FMCSA safety ratings, review history, and crash data into
-  plain-English carrier safety summaries. Use when a user asks how safe a
-  carrier is or wants a safety rating explained.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Translates FMCSA safety ratings, review history, and crash data into plain-English carrier safety summaries. Use when a user asks how safe a carrier is or wants a safety rating explained.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: free
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- safety-compliance
 ---
 
 # Safety Scorer
@@ -53,7 +55,7 @@ Query the search endpoint with the carrier's DOT number:
 
 ```bash
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber={DOT}"
+  "https://searchcarriers.com/api/v3/search?dotNumber={DOT}"
 ```
 
 Parse the first result from the response. The carrier object contains 143
@@ -174,7 +176,7 @@ Always end with a "What this doesn't tell you" section:
 
 ```bash
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber=12345"
+  "https://searchcarriers.com/api/v3/search?dotNumber=12345"
 ```
 
 **Response pattern**: "ABC Trucking (DOT 12345) has a Satisfactory safety
@@ -206,6 +208,10 @@ Bottom line: this carrier has multiple risk signals — a Conditional rating,
 active federal investigation, and above-average crash rate. Recommend
 additional vetting before tendering freight."
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | Scenario | Action |
@@ -222,4 +228,4 @@ additional vetting before tendering freight."
 - [FMCSA Safety Rating Methodology](https://www.fmcsa.dot.gov/safety/carrier-safety/motor-carrier-safety-rating-methodology)
 - [CSA/SMS Methodology](https://csa.fmcsa.dot.gov/About/Measures) — for understanding the difference between Safety Ratings and BASICs
 - [MCSI&P Process Overview](https://www.fmcsa.dot.gov/safety/carrier-safety/motor-carrier-safety-improvement-process)
-- SearchCarriers API reference: `{baseDir}/docs/api/`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`

@@ -65,7 +65,7 @@ Watchdog is a standalone monitoring plugin that drives Pro+ tier subscription re
 | Plugin Tool | Min Tier | Revenue Driver |
 |------------|----------|----------------|
 | `manage_watchlist` | Pro+ ($99/mo) | Gateway to monitoring -- users must add carriers before they get alerts |
-| `get_alerts` | Pro+ ($99/mo) | Core value prop -- automated change detection |
+| `get_alerts` | Pro+ | Compatibility response that prevents calls to an undocumented alert route |
 | `route_alert` | Pro+ ($99/mo) | Operational integration -- alerts in the tools teams already use |
 | `monitor_compliance` | Pro+ ($99/mo) | Enterprise value -- audit readiness and trend analysis |
 

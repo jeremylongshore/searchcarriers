@@ -1,3 +1,20 @@
+---
+name: onboarding-guide
+description: Guide a user from a fresh clone to a validated SearchCarriers Tools setup and first authorized lookup.
+tools: Read, Grep, Bash
+disallowedTools: []
+model: inherit
+color: blue
+version: 0.2.0
+author: Jeremy Longshore
+tags: [searchcarriers, onboarding, setup]
+skills: []
+background: false
+hooks: {}
+mcpServers: {}
+permissionMode: default
+---
+
 # Onboarding Guide Agent
 
 ## Identity
@@ -44,7 +61,7 @@ etc.) before retrying. Do not ask the user to fix it -- attempt the fix yourself
 
 If `SEARCHCARRIERS_API_KEY` is not set:
 
-- Tell the user to get their key from [searchcarriers.com/settings/api](https://searchcarriers.com/settings/api)
+- Tell the user to get their key from [SearchCarriers API settings](https://searchcarriers.com/settings/api-tokens)
 - Show them both ways to set it:
   - `export SEARCHCARRIERS_API_KEY="your_id|your_token"` (session)
   - Add it to `.env` (persistent, see `.env.example`)
@@ -142,7 +159,7 @@ Next Steps:
 - If `scripts/setup-dev.sh` fails, read the error and attempt to resolve it (install missing
   packages, fix permissions). If unresolvable, explain clearly what's needed and stop.
 - If the API key is invalid, tell the user to verify it at
-  [searchcarriers.com/settings/api](https://searchcarriers.com/settings/api). Do not retry
+  [SearchCarriers API settings](https://searchcarriers.com/settings/api-tokens). Do not retry
   with the same key.
 - If the test lookup fails with a network error, check connectivity and suggest the user
   verify they can reach `searchcarriers.com`.

@@ -12,20 +12,20 @@ sys.path.insert(
     str(_repo_root / "plugins" / "searchcarriers-ops-reporter" / "scripts"),
 )
 
+from conftest import assert_no_error, save_artifact  # noqa: E402
 from ops_reporter_mcp import (  # noqa: E402
     _export_data,
     _generate_compare,
     _generate_fleet,
     _generate_report,
 )
-from conftest import assert_no_error, save_artifact  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DOT_JBHUNT = "299569"
-DOT_WERNER = "224885"
+DOT_PRIMARY = "1234567"
+DOT_SECONDARY = "7654321"
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ class TestSmokeOpsReporter:
 
     async def test_generate_report(self, live_api_key, smoke_reports_dir):
         """generate_report returns a non-empty markdown report for J.B. Hunt."""
-        result = await _generate_report({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _generate_report({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
         assert "report" in result, f"Missing 'report' key in result: {list(result)}"
@@ -50,7 +50,7 @@ class TestSmokeOpsReporter:
 
     async def test_generate_fleet(self, live_api_key, smoke_reports_dir):
         """generate_fleet returns fleet-related keys for J.B. Hunt."""
-        result = await _generate_fleet({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _generate_fleet({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
         for key in ("report", "fleet_size"):
@@ -59,9 +59,9 @@ class TestSmokeOpsReporter:
         save_artifact(smoke_reports_dir, "generate_fleet", result)
 
     async def test_generate_compare(self, live_api_key, smoke_reports_dir):
-        """generate_compare returns comparison data for J.B. Hunt vs Werner."""
+        """generate_compare returns comparison data for J.B. Hunt vs Sample Logistics."""
         result = await _generate_compare(
-            {"dot_numbers": [DOT_JBHUNT, DOT_WERNER]}, live_api_key
+            {"dot_numbers": [DOT_PRIMARY, DOT_SECONDARY]}, live_api_key
         )
 
         assert_no_error(result)
@@ -72,9 +72,7 @@ class TestSmokeOpsReporter:
 
     async def test_export_data_json(self, live_api_key, smoke_reports_dir):
         """export_data with format=json returns exported data for J.B. Hunt."""
-        result = await _export_data(
-            {"dot_number": DOT_JBHUNT, "format": "json"}, live_api_key
-        )
+        result = await _export_data({"dot_number": DOT_PRIMARY, "format": "json"}, live_api_key)
 
         assert_no_error(result)
         assert "data" in result, f"Missing 'data' key in result: {list(result)}"
@@ -84,9 +82,7 @@ class TestSmokeOpsReporter:
 
     async def test_export_data_markdown(self, live_api_key, smoke_reports_dir):
         """export_data with format=markdown returns exported data for J.B. Hunt."""
-        result = await _export_data(
-            {"dot_number": DOT_JBHUNT, "format": "markdown"}, live_api_key
-        )
+        result = await _export_data({"dot_number": DOT_PRIMARY, "format": "markdown"}, live_api_key)
 
         assert_no_error(result)
         assert "data" in result, f"Missing 'data' key in result: {list(result)}"

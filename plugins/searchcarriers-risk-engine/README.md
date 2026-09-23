@@ -55,7 +55,7 @@ All tools include a `_pipeline` envelope for downstream consumption by Ops Repor
   "_pipeline": {
     "source": "risk-engine",
     "tool": "risk_score",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "dot_number": "12345",
     "timestamp": "2026-02-26T10:00:00Z"
   },

@@ -46,7 +46,7 @@ searchcarriers-carrier-intel/
 |------|---------|----------|---------------|
 | carrier_lookup | Search carriers by any identifier | free | GET /search |
 | carrier_profile | Full carrier + authorities + insurance | free | GET /search, GET /company/{dot}/authorities, GET /company/{dot}/insurances |
-| entity_map | Find related companies via VINs | pro | GET /company/{dot}/equipment, GET /search?vin= |
+| entity_map | Find related companies via VINs | pro | GET /company/{dot}/equipment, GET /search/by-vin/ |
 | fleet_summary | Equipment + vehicle roster | free | GET /company/{dot}/equipment, GET /company/{dot}/vehicles |
 
 ## Slash Commands
@@ -81,7 +81,7 @@ searchcarriers-carrier-intel/
 
 | Field | Value |
 |-------|-------|
-| WHO | Jeremy Longshore + Garret (adrenallen) |
+| WHO | Jeremy Longshore / Intent Solutions |
 | WHAT | Carrier data retrieval (INPUT stage) |
 | WHEN | Phase 4 (2026-02-26) |
 | TARGET | Freight brokers, 3PLs, safety teams |

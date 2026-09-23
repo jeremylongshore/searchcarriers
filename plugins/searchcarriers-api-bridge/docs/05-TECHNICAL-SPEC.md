@@ -55,11 +55,11 @@ searchcarriers-api-bridge/
 
 | Endpoint | Method | Purpose | Notes |
 |----------|--------|---------|-------|
-| `/api/v1/search` | GET | Probe search endpoint | Uses `dotNumber=69494` (Werner) as test query |
-| `/api/v1/company/{dot}/authorities` | GET | Probe authorities endpoint | Uses DOT 69494 |
-| `/api/v1/company/{dot}/insurances` | GET | Probe insurances endpoint | Uses DOT 69494 |
-| `/api/v1/company/{dot}/equipment` | GET | Probe equipment endpoint | Uses DOT 69494 |
-| `/api/v1/company/{dot}/vehicles` | GET | Probe vehicles endpoint | Uses DOT 69494 |
+| `/api/v3/search` | GET | Probe current search contract | Uses one known DOT and `perPage=1` |
+| `/api/v3/company/{dot}` | GET | Probe field-selected company response | Requests a bounded field set |
+| `/api/v3/company/{dot}/equipment` | GET | Probe current equipment route | Uses one known DOT |
+| `/api/v2/company/{dot}/qualification-reports` | GET | Probe qualification reports | Uses one known DOT |
+| `/api/v1/company/watch` | GET | Probe watch-list compatibility | Treats plan/resource responses structurally |
 
 ### Used by bulk_lookup
 
@@ -74,18 +74,19 @@ searchcarriers-api-bridge/
 | Action | Endpoint | Purpose |
 |--------|----------|---------|
 | `export` | None (pure formatting) | Formats existing carrier data for TMS import |
-| `import` | `/api/v1/search?dotNumber={dot}` per carrier | Fetches live data to compare against TMS data |
+| `import` | `/api/v3/search?dotNumber={dot}` per carrier | Fetches live data to compare against TMS data |
 
 ### Used by webhook_manage
 
 | Action | Endpoint | Method | Notes |
 |--------|----------|--------|-------|
-| `create` | `/api/v1/webhooks` | POST | Creates new webhook endpoint |
-| `list` | `/api/v1/webhooks` | GET | Lists all configured webhooks |
-| `update` | `/api/v1/webhooks/{id}` | PUT | Updates webhook configuration |
-| `delete` | `/api/v1/webhooks/{id}` | DELETE | Removes webhook endpoint |
+| `create` | Local configuration | File write | Creates a downstream webhook record |
+| `list` | Local configuration | File read | Lists locally configured webhooks |
+| `update` | Local configuration | File write | Updates a local webhook record |
+| `delete` | Local configuration | File write | Removes a local webhook record |
 
-**Base URL:** `https://searchcarriers.com/api/v1`
+**API origin:** `https://searchcarriers.com`; the health probe selects the
+documented v3, v2, or v1 route for each capability.
 
 **Authentication:** All requests include `Authorization: Bearer {SEARCHCARRIERS_API_KEY}` header.
 
@@ -95,8 +96,8 @@ searchcarriers-api-bridge/
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api |
-| `SEARCHCARRIERS_API_BASE` | No | `https://searchcarriers.com/api/v1` | API base URL override (for testing against staging) |
+| `SEARCHCARRIERS_API_KEY` | Yes | -- | Bearer token for API authentication. Format: `{id}\|{token}` (Laravel Sanctum). Get from https://searchcarriers.com/settings/api-tokens |
+| `SEARCHCARRIERS_API_BASE` | No | `https://searchcarriers.com` | API origin override (for testing against staging) |
 | `SEARCHCARRIERS_TIMEOUT` | No | `10` | HTTP request timeout in seconds per individual request |
 | `SEARCHCARRIERS_MAX_RETRIES` | No | `3` | Maximum retry attempts for transient failures (429, 504) |
 | `SEARCHCARRIERS_BATCH_CONCURRENCY` | No | `3` | Max concurrent API requests during bulk operations |
@@ -374,6 +375,7 @@ TOOL_TIERS = {
     "tms_sync": "enterprise",
 }
 
+
 def check_tier(tool_name: str, user_tier: str) -> bool:
     """Return True if user_tier is sufficient for tool_name."""
     required = TOOL_TIERS[tool_name]
@@ -391,7 +393,7 @@ class TokenBucket:
     """Rate limiter for SearchCarriers API (3 req/s recommended)."""
 
     def __init__(self, rate: float = 3.0, capacity: int = 3):
-        self.rate = rate          # tokens per second
+        self.rate = rate  # tokens per second
         self.capacity = capacity  # max burst
         self.tokens = capacity
         self.last_refill = time.monotonic()
@@ -453,8 +455,8 @@ MCLEOD_MAPPING = {
     "phy_state": "State",
     "phy_zip": "Zip",
     "phone": "Phone",
-    "status_code": "Status",       # A -> Active, I -> Inactive
-    "safety_rating": "SafetyRating", # S -> Satisfactory, C -> Conditional, U -> Unsatisfactory
+    "status_code": "Status",  # A -> Active, I -> Inactive
+    "safety_rating": "SafetyRating",  # S -> Satisfactory, C -> Conditional, U -> Unsatisfactory
     "power_units": "PowerUnits",
     "total_drivers": "TotalDrivers",
     "common_authority_status": "CommonAuthority",

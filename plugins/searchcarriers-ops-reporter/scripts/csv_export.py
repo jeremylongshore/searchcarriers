@@ -10,7 +10,6 @@ import csv
 import io
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Column definitions — (internal_key, display_header)
 # ---------------------------------------------------------------------------
@@ -88,10 +87,7 @@ def generate_carrier_csv(
     headers = [col[1] for col in CARRIER_COLUMNS]
     writer = csv.DictWriter(buf, fieldnames=headers, quoting=csv.QUOTE_ALL)
     writer.writeheader()
-    row = {
-        col[1]: _format_cell(col[0], carrier.get(col[0]))
-        for col in CARRIER_COLUMNS
-    }
+    row = {col[1]: _format_cell(col[0], carrier.get(col[0])) for col in CARRIER_COLUMNS}
     writer.writerow(row)
 
     # --- Authorities section ---
@@ -101,10 +97,7 @@ def generate_carrier_csv(
         auth_writer = csv.DictWriter(buf, fieldnames=auth_headers, quoting=csv.QUOTE_ALL)
         auth_writer.writeheader()
         for auth in authorities:
-            auth_row = {
-                col[1]: _format_cell(col[0], auth.get(col[0]))
-                for col in AUTHORITY_COLUMNS
-            }
+            auth_row = {col[1]: _format_cell(col[0], auth.get(col[0])) for col in AUTHORITY_COLUMNS}
             auth_writer.writerow(auth_row)
 
     # --- Insurance section ---
@@ -114,10 +107,7 @@ def generate_carrier_csv(
         ins_writer = csv.DictWriter(buf, fieldnames=ins_headers, quoting=csv.QUOTE_ALL)
         ins_writer.writeheader()
         for ins in insurances:
-            ins_row = {
-                col[1]: _format_cell(col[0], ins.get(col[0]))
-                for col in INSURANCE_COLUMNS
-            }
+            ins_row = {col[1]: _format_cell(col[0], ins.get(col[0])) for col in INSURANCE_COLUMNS}
             ins_writer.writerow(ins_row)
 
     return buf.getvalue()

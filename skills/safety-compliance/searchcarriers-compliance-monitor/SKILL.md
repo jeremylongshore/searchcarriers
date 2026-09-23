@@ -1,14 +1,17 @@
 ---
 name: searchcarriers-compliance-monitor
-description: >-
-  Tracks MCS-150 currency, registration freshness, safety reviews, and
-  insurance status. Use when checking carrier compliance or filing status.
-allowed-tools: "Read,Grep,Bash(curl:*),Bash(python:*)"
+description: Tracks MCS-150 currency, registration freshness, safety reviews, and insurance status. Use when checking carrier compliance or filing status.
+allowed-tools: Read,Grep,Bash(curl:*),Bash(python:*)
 metadata:
-  author: "Jeremy Longshore <jeremy@intentsolutions.io>"
-  version: 0.1.0
-  license: BUSL-1.1
   tier: pro
+version: 0.2.0
+author: Jeremy Longshore <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: Claude Code or another MCP-capable client; Python 3.10+; network access to searchcarriers.com; an appropriate SearchCarriers API subscription.
+tags:
+- searchcarriers
+- motor-carrier
+- safety-compliance
 ---
 
 # Compliance Monitor
@@ -58,7 +61,7 @@ track record.
 
 ```bash
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber={DOT}"
+  "https://searchcarriers.com/api/v3/search?dotNumber={DOT}"
 ```
 
 Parse the carrier object from the response. Extract all compliance-relevant
@@ -72,7 +75,7 @@ months. Calculate months since last filing:
 ```python
 from datetime import datetime
 
-mcs150_date = datetime.strptime(carrier['mcs150_date'], '%Y-%m-%d')
+mcs150_date = datetime.strptime(carrier["mcs150_date"], "%Y-%m-%d")
 months_since = (datetime.now() - mcs150_date).days / 30.44
 
 if months_since <= 24:
@@ -80,12 +83,16 @@ if months_since <= 24:
     note = f"Filed {months_since:.0f} months ago. Next filing due by {next_due}."
 elif months_since <= 30:
     status = "WARNING"
-    note = f"Filed {months_since:.0f} months ago. Past the 24-month biennial deadline. " \
-           "FMCSA may begin deactivation proceedings."
+    note = (
+        f"Filed {months_since:.0f} months ago. Past the 24-month biennial deadline. "
+        "FMCSA may begin deactivation proceedings."
+    )
 else:
     status = "OVERDUE"
-    note = f"Filed {months_since:.0f} months ago. Significantly past deadline. " \
-           "Carrier risks involuntary deactivation if not already flagged."
+    note = (
+        f"Filed {months_since:.0f} months ago. Significantly past deadline. "
+        "Carrier risks involuntary deactivation if not already flagged."
+    )
 ```
 
 **Why this matters**: FMCSA periodically deactivates carriers with overdue
@@ -108,18 +115,22 @@ Check `status_code`:
 Calculate the carrier's age from `add_date`:
 
 ```python
-add_date = datetime.strptime(carrier['add_date'], '%Y-%m-%d')
+add_date = datetime.strptime(carrier["add_date"], "%Y-%m-%d")
 months_registered = (datetime.now() - add_date).days / 30.44
 
 if months_registered < 18:
     status = "NEW ENTRANT"
-    note = f"Registered {months_registered:.0f} months ago. Still in the FMCSA New Entrant " \
-           "Safety Assurance Program. Subject to mandatory safety audit. Higher statistical " \
-           "risk profile due to limited operating history."
+    note = (
+        f"Registered {months_registered:.0f} months ago. Still in the FMCSA New Entrant "
+        "Safety Assurance Program. Subject to mandatory safety audit. Higher statistical "
+        "risk profile due to limited operating history."
+    )
 elif months_registered < 36:
     status = "RELATIVELY NEW"
-    note = f"Registered {months_registered:.0f} months ago. Past New Entrant period but " \
-           "limited track record."
+    note = (
+        f"Registered {months_registered:.0f} months ago. Past New Entrant period but "
+        "limited track record."
+    )
 else:
     status = "ESTABLISHED"
     note = f"Registered {months_registered / 12:.1f} years ago."
@@ -135,8 +146,8 @@ statistical risk is real and should be noted.
 Check `safety_rating_date` and `review_date`:
 
 ```python
-if carrier.get('safety_rating_date'):
-    rating_date = datetime.strptime(carrier['safety_rating_date'], '%Y-%m-%d')
+if carrier.get("safety_rating_date"):
+    rating_date = datetime.strptime(carrier["safety_rating_date"], "%Y-%m-%d")
     rating_age_years = (datetime.now() - rating_date).days / 365.25
 
     if rating_age_years <= 3:
@@ -144,12 +155,16 @@ if carrier.get('safety_rating_date'):
         note = f"{carrier['safety_rating']} rating from {rating_age_years:.1f} years ago."
     elif rating_age_years <= 5:
         status = "AGING"
-        note = f"{carrier['safety_rating']} rating from {rating_age_years:.1f} years ago. " \
-               "Still valid but may not reflect current operations."
+        note = (
+            f"{carrier['safety_rating']} rating from {rating_age_years:.1f} years ago. "
+            "Still valid but may not reflect current operations."
+        )
     else:
         status = "STALE"
-        note = f"{carrier['safety_rating']} rating from {rating_age_years:.1f} years ago. " \
-               "Limited relevance to current compliance posture."
+        note = (
+            f"{carrier['safety_rating']} rating from {rating_age_years:.1f} years ago. "
+            "Limited relevance to current compliance posture."
+        )
 else:
     status = "NONE"
     note = "No safety rating on file. Carrier has never undergone a compliance review."
@@ -164,13 +179,15 @@ if the formal safety rating is old.
 If `mcsipstep` is populated:
 
 ```python
-if carrier.get('mcsipstep'):
+if carrier.get("mcsipstep"):
     status = "FLAGGED"
-    step = carrier['mcsipstep']
-    step_date = carrier.get('mcsipdate', 'unknown date')
-    note = f"Carrier is in the MCSI&P enforcement process at stage: {step} " \
-           f"(since {step_date}). This indicates FMCSA has identified safety " \
-           "concerns through BASICs scores and is actively pursuing enforcement."
+    step = carrier["mcsipstep"]
+    step_date = carrier.get("mcsipdate", "unknown date")
+    note = (
+        f"Carrier is in the MCSI&P enforcement process at stage: {step} "
+        f"(since {step_date}). This indicates FMCSA has identified safety "
+        "concerns through BASICs scores and is actively pursuing enforcement."
+    )
 else:
     status = "CLEAR"
     note = "Not currently under enhanced FMCSA oversight."
@@ -203,12 +220,14 @@ Check for:
   pending state.
 
 ```python
-active_policies = [p for p in insurances if p.get('status') == 'Active']
+active_policies = [p for p in insurances if p.get("status") == "Active"]
 
 if not active_policies:
     status = "FAIL"
-    note = "No active insurance filings on record with FMCSA. " \
-           "Carrier cannot legally operate without required insurance."
+    note = (
+        "No active insurance filings on record with FMCSA. "
+        "Carrier cannot legally operate without required insurance."
+    )
 else:
     status = "PASS"
     # Report coverage amounts and insurer names
@@ -267,7 +286,7 @@ Based on the checklist results, provide specific next steps:
 ```bash
 # Fetch carrier data
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber=12345"
+  "https://searchcarriers.com/api/v3/search?dotNumber=12345"
 
 # Fetch insurance data
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
@@ -286,7 +305,7 @@ registered for 8 years with a Satisfactory safety rating from 2022."
 
 ```bash
 curl -s -H "Authorization: Bearer $SEARCHCARRIERS_API_KEY" \
-  "https://searchcarriers.com/api/v1/search?dotNumber=67890"
+  "https://searchcarriers.com/api/v3/search?dotNumber=67890"
 ```
 
 **Response pattern**: "XYZ Transport's MCS-150 was last filed on 2023-11-15,
@@ -308,6 +327,10 @@ elevated statistical risk due to limited operating history. Recommend
 verifying completion of the mandatory safety audit and reviewing any
 available inspection records."
 
+## Output
+
+Return the requested result with the API route version, relevant carrier identifiers, evidence, missing-data limits, and the next operational action. Never include an API token or an unredacted bulk API response.
+
 ## Error Handling
 
 | Scenario | Action |
@@ -328,4 +351,4 @@ available inspection records."
 - [New Entrant Safety Assurance Program](https://www.fmcsa.dot.gov/safety/new-entrant-safety-assurance-program) — audit requirements for new carriers
 - [FMCSA Insurance Requirements](https://www.fmcsa.dot.gov/registration/insurance-requirements) — minimum coverage by commodity type
 - [MCSI&P Process](https://www.fmcsa.dot.gov/safety/carrier-safety/motor-carrier-safety-improvement-process) — enforcement pipeline stages
-- SearchCarriers API reference: `{baseDir}/docs/api/`
+- SearchCarriers API documentation: https://searchcarriers.com/docs/api and the repository `API-DISCOVERY.md`

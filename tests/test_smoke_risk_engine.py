@@ -12,15 +12,15 @@ sys.path.insert(
     str(_repo_root / "plugins" / "searchcarriers-risk-engine" / "scripts"),
 )
 
+from conftest import assert_no_error, save_artifact  # noqa: E402
 from risk_engine_mcp import (  # noqa: E402
     _compliance_audit,
     _insurance_check,
     _risk_score,
     _vetting_check,
 )
-from conftest import assert_no_error, save_artifact  # noqa: E402
 
-DOT_JBHUNT = "299569"
+DOT_PRIMARY = "1234567"
 
 VALID_RISK_LEVELS = {"low", "medium", "elevated", "high"}
 
@@ -31,7 +31,7 @@ class TestSmokeRiskEngine:
 
     async def test_risk_score(self, live_api_key, smoke_reports_dir):
         """Risk score returns a 0-100 score, a named risk level, and factor breakdown."""
-        result = await _risk_score({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _risk_score({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
 
@@ -62,7 +62,7 @@ class TestSmokeRiskEngine:
 
     async def test_vetting_check(self, live_api_key, smoke_reports_dir):
         """Vetting check returns a PASS/FAIL/REVIEW verdict and a rules_checked count."""
-        result = await _vetting_check({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _vetting_check({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
 
@@ -82,7 +82,7 @@ class TestSmokeRiskEngine:
 
     async def test_insurance_check(self, live_api_key, smoke_reports_dir):
         """Insurance check returns status and active/lapsed policy data."""
-        result = await _insurance_check({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _insurance_check({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
 
@@ -105,7 +105,7 @@ class TestSmokeRiskEngine:
 
     async def test_compliance_audit(self, live_api_key, smoke_reports_dir):
         """Compliance audit returns a checks list with per-check status entries."""
-        result = await _compliance_audit({"dot_number": DOT_JBHUNT}, live_api_key)
+        result = await _compliance_audit({"dot_number": DOT_PRIMARY}, live_api_key)
 
         assert_no_error(result)
 

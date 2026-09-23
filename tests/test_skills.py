@@ -1,18 +1,26 @@
 """Validate all SKILL.md files against skill-creator spec."""
 
 import re
-from pathlib import Path
 
 import pytest
-
 from conftest import parse_frontmatter
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9-]*[a-z0-9]$")
 BANNED_WORDS = ["anthropic", "claude"]
 VALID_TOOLS = {
-    "Read", "Write", "Edit", "Bash", "Glob", "Grep",
-    "WebFetch", "WebSearch", "Task", "NotebookEdit",
-    "AskUserQuestion", "Skill", "TodoWrite",
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Glob",
+    "Grep",
+    "WebFetch",
+    "WebSearch",
+    "Task",
+    "NotebookEdit",
+    "AskUserQuestion",
+    "Skill",
+    "TodoWrite",
 }
 
 
@@ -66,8 +74,9 @@ class TestSkillFrontmatter:
             if not fm or "description" not in fm:
                 continue
             desc = str(fm["description"]).strip()
-            assert not re.match(r"^(I |I'|You )", desc, re.IGNORECASE), \
+            assert not re.match(r"^(I |I'|You )", desc, re.IGNORECASE), (
                 f"{sf}: Description must be third person (no I/you)"
+            )
 
 
 class TestSkillBody:
@@ -83,15 +92,15 @@ class TestSkillBody:
                     continue
                 if in_code:
                     continue
-                assert not re.search(r"/home/|/Users/|C:\\", line), \
+                assert not re.search(r"/home/|/Users/|C:\\", line), (
                     f"{sf}:{i}: Absolute path found (use {{baseDir}}/)"
+                )
 
     def test_basedir_refs_pattern(self, all_skill_files):
         """Ensure {baseDir} is used correctly (no escapes)."""
         for sf in all_skill_files:
             content = sf.read_text()
-            assert "{baseDir}/../" not in content, \
-                f"{sf}: Path escape detected ({'{baseDir}/../'})"
+            assert "{baseDir}/../" not in content, f"{sf}: Path escape detected ({'{baseDir}/../'})"
 
     def test_line_count_warning(self, all_skill_files):
         """Flag skills over 500 lines — consider moving code to scripts/."""
@@ -101,4 +110,6 @@ class TestSkillBody:
             if lines > 500:
                 over_limit.append(f"{sf.parent.name}: {lines} lines")
         if over_limit:
-            pytest.skip(f"Advisory: {len(over_limit)} skill(s) over 500 lines: {', '.join(over_limit)}")
+            pytest.skip(
+                f"Advisory: {len(over_limit)} skill(s) over 500 lines: {', '.join(over_limit)}"
+            )

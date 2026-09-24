@@ -1,2 +1,2 @@
 httpx
-mcp>=1.0,<2  # 2.x removed the Server.list_tools()/call_tool() decorators these servers use
+mcp>=1.0,<3  # 1.x and 2.x both supported via plugins/shared/mcp_compat.py

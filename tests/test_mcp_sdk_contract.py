@@ -1,46 +1,72 @@
-"""The plugin MCP servers register tools with the decorator API of the MCP Python SDK 1.x.
+"""The plugin MCP servers must start on both MCP Python SDK 1.x and 2.x.
 
-SDK 2.x removed ``Server.list_tools()`` / ``Server.call_tool()``. Every server calls them
-inside ``serve()``, which no other test executes, so an open-ended ``mcp>=1.0`` requirement
-let a fresh install resolve 2.x and crash at startup while this suite stayed green
-(found 2026-09-20). This test pins the contract: it fails if the installed SDK lacks the
-API the servers use, and it fails if a requirement is left uncapped while they still use it.
-Port the servers to the 2.x registration API, then delete the cap and this test together.
+SDK 2.x removed the ``Server.list_tools()`` / ``Server.call_tool()`` decorators.
+Until 2026-09 every server used them inside ``serve()``, which no other test
+executes, so a fresh install that resolved 2.x crashed at startup while this
+suite stayed green. The servers now register through
+``plugins.shared.mcp_compat.build_server``; these tests pin that and exercise
+the adapter against whichever SDK is installed.
 """
 
+import json
 import re
 from pathlib import Path
 
 import pytest
-from mcp.server import Server
+from mcp.types import TextContent, Tool
+
+from plugins.shared.mcp_compat import build_server, sdk2_handlers, uses_decorator_api
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVERS = sorted(ROOT.glob("plugins/*/scripts/*_mcp.py"))
-DECORATORS = ("list_tools", "call_tool")
-
-
-def _uses_decorator_api(path: Path) -> bool:
-    return bool(re.search(r"@\w+\.(list_tools|call_tool)\(\)", path.read_text(encoding="utf-8")))
 
 
 def test_there_are_plugin_servers_to_check():
-    assert SERVERS, "no plugins/*/scripts/*_mcp.py found; this contract test is checking nothing"
-    assert any(_uses_decorator_api(p) for p in SERVERS)
-
-
-@pytest.mark.parametrize("attr", DECORATORS)
-def test_installed_sdk_has_the_decorator_api_the_servers_use(attr):
-    assert hasattr(Server("contract-probe"), attr), (
-        f"installed mcp SDK has no Server.{attr}(); the plugin servers would crash in serve()"
-    )
+    assert len(SERVERS) == 5
 
 
 @pytest.mark.parametrize("server", SERVERS, ids=lambda p: p.parent.parent.name)
-def test_requirement_is_capped_while_the_server_uses_the_decorator_api(server):
-    if not _uses_decorator_api(server):
-        pytest.skip("server no longer uses the 1.x decorator API")
+def test_server_registers_through_the_compat_builder(server):
+    text = server.read_text(encoding="utf-8")
+    assert not re.search(r"@\w+\.(list_tools|call_tool)\(\)", text), "1.x-only decorator API"
+    assert re.search(r'build_server\("searchcarriers-[a-z-]+", list_tools, call_tool\)', text)
+
+
+@pytest.mark.parametrize("server", SERVERS, ids=lambda p: p.parent.parent.name)
+def test_requirement_allows_both_sdk_majors(server):
     req = (server.parent / "requirements.txt").read_text(encoding="utf-8")
-    line = next((ln for ln in req.splitlines() if re.match(r"^mcp\b", ln.strip())), None)
-    assert line is not None, f"{server.parent.name}: no mcp requirement declared"
-    spec = line.split("#")[0]
-    assert re.search(r"<\s*2\b", spec), f"{server.parent.name}: '{line}' does not cap mcp below 2"
+    line = next(ln for ln in req.splitlines() if re.match(r"^mcp\b", ln.strip()))
+    assert re.search(r"<\s*3\b", line.split("#")[0])
+
+
+async def _list_tools():
+    return [Tool(name="probe", description="probe tool", inputSchema={"type": "object"})]
+
+
+async def _call_tool(name, arguments):
+    if name == "boom":
+        raise RuntimeError("handler exploded")
+    return [TextContent(type="text", text=json.dumps({"name": name, "args": arguments}))]
+
+
+def test_build_server_returns_a_named_server_on_the_installed_sdk():
+    assert (
+        build_server("searchcarriers-probe", _list_tools, _call_tool).name == "searchcarriers-probe"
+    )
+
+
+@pytest.mark.skipif(uses_decorator_api(), reason="SDK 1.x uses the decorator path")
+async def test_sdk2_adapter_lists_and_calls_tools():
+    from mcp.types import CallToolRequestParams
+
+    on_list, on_call = sdk2_handlers(_list_tools, _call_tool)
+    listed = await on_list(None, None)
+    assert [t.name for t in listed.tools] == ["probe"]
+
+    ok = await on_call(None, CallToolRequestParams(name="probe", arguments={"a": 1}))
+    assert not ok.is_error
+    assert json.loads(ok.content[0].text) == {"name": "probe", "args": {"a": 1}}
+
+    bad = await on_call(None, CallToolRequestParams(name="boom", arguments=None))
+    assert bad.is_error
+    assert bad.content[0].text == "handler exploded"

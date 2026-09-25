@@ -26,7 +26,6 @@ if _PLUGIN_ROOT not in sys.path:
 # ---------------------------------------------------------------------------
 # MCP SDK
 # ---------------------------------------------------------------------------
-from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
@@ -38,6 +37,7 @@ from plugins.shared.api_contract import (  # noqa: E402
     normalize_v3_company,
     v3_search_params,
 )
+from plugins.shared.mcp_compat import build_server  # noqa: E402
 from plugins.shared.tier_gate import TierError, check_tier  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -503,13 +503,9 @@ async def serve() -> None:
     # Read caller tier from environment (optional; defaults to "free").
     user_tier = os.environ.get("SEARCHCARRIERS_TIER", "free").strip().lower()
 
-    server = Server("searchcarriers-carrier-intel")
-
-    @server.list_tools()
     async def list_tools() -> list[Tool]:
         return _TOOL_DEFINITIONS
 
-    @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         # Tier gate — returns a structured error payload on failure.
         try:
@@ -538,6 +534,8 @@ async def serve() -> None:
             result = _error_payload("internal_error", f"Unexpected error: {exc}")
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    server = build_server("searchcarriers-carrier-intel", list_tools, call_tool)
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
